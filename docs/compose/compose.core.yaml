@@ -43,3 +43,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: fk-qdrant
+
+    restart: unless-stopped
+
+    volumes:
+      - ../data/qdrant:/qdrant/storage
+
+    ports:
+      - "6333:6333"
+
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
