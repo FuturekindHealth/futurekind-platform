@@ -49,7 +49,44 @@ services:
     networks:
       - futurekind
 
-  qdrant:
+    litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: fk-litellm
+
+    restart: unless-stopped
+
+    profiles:
+      - ai
+
+    command:
+      - "--config"
+      - "/app/config.yaml"
+
+    volumes:
+      - ./configs/litellm/config.yaml:/app/config.yaml:ro
+
+    env_file:
+      - .env
+
+    ports:
+      - "4000:4000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:4000/health/liveliness"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - futurekind
+    
+    qdrant:
     image: qdrant/qdrant:v1.15.4
     container_name: fk-qdrant
     restart: unless-stopped
