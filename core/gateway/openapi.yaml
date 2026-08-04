@@ -1,0 +1,33 @@
+openapi: 3.1.0
+
+info:
+
+  title: FutureKind Gateway
+
+  version: 0.1.0
+
+paths:
+
+  /chat:
+
+    post:
+
+      summary: Chat Completion
+
+  /models:
+
+    get:
+
+      summary: Available Models
+
+  /health:
+
+    get:
+
+      summary: Gateway Health
+
+  /metrics:
+
+    get:
+
+      summary: Prometheus Metrics
