@@ -39,3 +39,4 @@ temp/
 # Secrets
 secrets/*
 !secrets/.gitkeep
+*.code-workspace
