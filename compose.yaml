@@ -1,0 +1,113 @@
+name: futurekind
+
+services:
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: fk-postgres
+    restart: unless-stopped
+    profiles: ["core"]
+
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+
+    volumes:
+      - ${FK_RUNTIME}/postgres:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - futurekind
+
+  redis:
+    image: redis:7-alpine
+    container_name: fk-redis
+    restart: unless-stopped
+    profiles: ["core"]
+
+    command:
+      - redis-server
+      - --appendonly
+      - yes
+
+    volumes:
+      - ${FK_RUNTIME}/redis:/data
+
+    healthcheck:
+      test: ["CMD","redis-cli","ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - futurekind
+
+    litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: fk-litellm
+
+    restart: unless-stopped
+
+    profiles:
+      - ai
+
+    command:
+      - "--config"
+      - "/app/config.yaml"
+
+    volumes:
+      - ./configs/litellm/config.yaml:/app/config.yaml:ro
+
+    env_file:
+      - .env
+
+    ports:
+      - "4000:4000"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:4000/health/liveliness"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - futurekind
+    
+    qdrant:
+    image: qdrant/qdrant:v1.15.4
+    container_name: fk-qdrant
+    restart: unless-stopped
+    profiles: ["core"]
+
+    volumes:
+      - ${FK_RUNTIME}/qdrant:/qdrant/storage
+
+    ports:
+      - "6333:6333"
+
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:6333/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - futurekind
+
+networks:
+
+  futurekind:
+    name: futurekind

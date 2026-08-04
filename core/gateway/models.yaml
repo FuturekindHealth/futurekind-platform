@@ -1,0 +1,19 @@
+models:
+
+  default:
+
+    provider: ollama
+
+    model: gpt-oss:20b
+
+  fast:
+
+    provider: ollama
+
+    model: gemma3:12b
+
+  reasoning:
+
+    provider: ollama
+
+    model: qwen3:14b

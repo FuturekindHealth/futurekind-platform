@@ -1,0 +1,68 @@
+name: FutureKind
+
+version: 0.1.0
+
+codename: Genesis
+
+description: >
+  Local-first Open AI Platform for Healthcare
+
+organization: FutureKind Health
+
+license: Apache-2.0
+
+homepage: https://github.com/FuturekindHealth
+
+repository: https://github.com/FuturekindHealth/futurekind-platform
+
+support:
+  discussions: true
+  issues: true
+
+platform:
+
+  deployment:
+
+    docker: true
+
+    synology: true
+
+    kubernetes: planned
+
+    cloud: planned
+
+  ai:
+
+    gateway: LiteLLM
+
+    interface: Open WebUI
+
+    vector: Qdrant
+
+    tracing: Langfuse
+
+    search: SearXNG
+
+    crawler: Crawl4AI
+
+  monitoring:
+
+    prometheus: true
+
+    grafana: true
+
+    opentelemetry: true
+
+runtime:
+
+  local_first: true
+
+  internet_required: false
+
+minimum:
+
+  ram: 16GB
+
+recommended:
+
+  ram: 32GB
