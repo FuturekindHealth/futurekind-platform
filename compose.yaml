@@ -49,7 +49,7 @@ services:
     networks:
       - futurekind
 
-    litellm:
+  litellm:
     image: ghcr.io/berriai/litellm:main-latest
     container_name: fk-litellm
 
@@ -86,7 +86,7 @@ services:
     networks:
       - futurekind
     
-    qdrant:
+  qdrant:
     image: qdrant/qdrant:v1.15.4
     container_name: fk-qdrant
     restart: unless-stopped
