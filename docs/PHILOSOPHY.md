@@ -180,8 +180,9 @@ thing that cannot be bought — outside scrutiny of a clinical system.
   the thresholds, the audit record's format, the vocabulary. A safety property whose
   definition is a trade secret is not a safety property — it is a promise.
 - The uncomfortable half: a licence cannot protect a hospital from a bad fork, and this
-  repository currently has no external contributors while it does have community
-  documents. Open source is a maintenance claim, and claims must be paid in maintenance.
+  repository has never taken a commit from outside its author — all 94 of them, measured
+  with `git log --format='%an' | sort | uniq -c` — while it does have community documents.
+  Open source is a maintenance claim, and claims must be paid in maintenance.
 - What would falsify this: users who want a hosted service more than they want the source.
   That is a real market outcome and it is not a betrayal — it is the reason the platform
   boundary must stay honest either way.

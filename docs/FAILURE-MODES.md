@@ -179,9 +179,12 @@ is invisible to the buyer.
 
 - **Earliest sign.** An issue from someone running a modified catalogue; a vendor citing
   FutureKind while the never-list is unenforceable in their build.
-- **Already visible.** No trademark policy, no CLA, no foundation, zero external
-  contributors, and a `CONTRIBUTING.md` whose Community section describes a practice rather
-  than a record — which is fine as intent and misleading as evidence.
+- **Already visible.** No trademark policy, no CLA, no foundation. Contribution is
+  self-merges: every one of the repository's 94 commits has one author, and the merge
+  commits in `main`'s history (`#5`, `#6`, `#7`) each bring in a branch of the same
+  repository — measured with `git log --format='%an' | sort | uniq -c`. And a
+  `CONTRIBUTING.md` whose Community section describes a practice rather than a record,
+  which is fine as intent and misleading as evidence.
 - **Cheapest monitor.** A named licence-plus-checklist artefact — "a conformant deployment
   answers these seven questions" — which is the only enforceable form of an open-source
   promise without trademark litigation.
@@ -209,7 +212,7 @@ The mirror question: if this works, what will have been observable first, and in
 | **A clinician ratifies a golden case they did not write.** | Segregation of duties arrives in the evaluation, and every gate in `CLINICAL_SAFETY.md` §6 acquires a real input. | 0 of 100 |
 | **Edit distance stays high while adoption stays high.** | Humans are reading. This single pair distinguishes FM1 from FM10, and both from success. | Never measured |
 | **A second site installs it without the author in the room.** | The documentation is a working interface, not a description of one. | One deployment, one author |
-| **A stranger's pull request deletes code and passes the gate.** | The smallest-system rule is held by people with no incentive to hold it. | No external contributors |
+| **A stranger's pull request deletes code and passes the gate.** | The smallest-system rule is held by people with no incentive to hold it. | Not one stranger yet: all 94 commits share one author |
 | **A department refuses a feature for a stated clinical reason.** | Ownership of the never-list has moved to the clinic. | Not attempted |
 | **An incident produces a check *and* a measurement of that check's cost.** | The safety engine keeps running after launch. It already does this in the small: the tenth check was measured and rejected. | Working |
 | **A regulator accepts the audit record without a custom export.** | Stage 4 becomes real. This is the one that turns the platform into an institution. | Impossible today |
