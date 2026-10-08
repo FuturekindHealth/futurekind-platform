@@ -81,7 +81,7 @@ is SPEC-10-04, deliberately left for ADR-0004 rather than changed mid-release.
 | Path | What it is | State |
 | --- | --- | --- |
 | `core/gateway/` | The Gateway: FastAPI service, catalogue, policy, routing, LiteLLM transport, OpenAI-compatible door, logging, metrics | **Built**, 492 tests |
-| `apps/radiology_copilot/` | The first clinical application on it: draft → review → sign → export for imaging studies | **Built**, 160 tests |
+| `apps/radiology_copilot/` | The first clinical application on it: draft → check → review → sign → export for imaging studies | **Built**, 225 tests |
 | `core/gateway/models.yaml` | The live catalogue: 6 authorised skills, their policy, and the aliases that serve them | Config, reviewed one skill at a time |
 | `configs/` | Platform manifest and LiteLLM's alias list | Config |
 | `compose.yaml` | One installation: postgres, redis, qdrant, litellm, gateway, open webui, behind profiles | Written and parsed; **never booted here** |
@@ -122,6 +122,13 @@ python -m venv .venv && .venv/bin/pip install -e ../../core/gateway -e ".[dev]" 
 The Gateway needs an Ollama host (or any OpenAI-compatible backend LiteLLM can
 address) before it can answer anything. Without one it still starts, still serves
 `/health`, and answers `502` on a completion — honestly, rather than pretending.
+
+With both packages installed in one environment, `python -m futurekind_gateway` and
+`python -m futurekind_radiology` start the platform and the first product on it: the
+copilot serves its review screen at `http://127.0.0.1:8200/`, where a submission becomes
+a drafted report, nine checks against what was submitted, a named sign-off that an
+unsupported sentence cannot pass, and an export. That is the whole clinical surface in
+Alpha — see [`apps/radiology_copilot/README.md`](apps/radiology_copilot/README.md).
 
 ---
 
@@ -202,6 +209,10 @@ truth at this stage:
   and audit semantics specified first (SPEC-15-03).
 - **One skill has a caller.** `radiology-report` runs in the copilot; the others are
   catalogue entries awaiting an application.
+- **The clinical product is one study type.** The copilot's screen works end to end for
+  MRI brain, and that is the only study profile built. Any other protocol runs the same
+  nine text checks with no structure list and no out-of-scope negatives — a weaker pass,
+  which `metadata.profile` records rather than hiding.
 - **The golden set is unratified.** 100 studies, authored by an engineer, `ratified:
   pending` on every one of them. It is a starting artefact, not an evaluation.
 - **Latency is measured on one machine.** The best number obtained so far is

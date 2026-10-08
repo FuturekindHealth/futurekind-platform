@@ -10,11 +10,11 @@ as built; everything here is above it.
 
 | # | Document | What it is | Status |
 | --- | --- | --- | --- |
-| 1 | [`RADIOLOGY_WORKFLOW.md`](RADIOLOGY_WORKFLOW.md) | Patient arrival → signed report in HIS/ERP/PACS. Steps S0–S11, five modalities, 18 failures, the automation-bias requirements, the API surface | Design, with every claim tied to a file |
-| 2 | [`PRODUCT_SPECIFICATION.md`](PRODUCT_SPECIFICATION.md) | Features, modules, clinical and commercial value, boundaries, release shapes, success metrics | Design |
+| 1 | [`RADIOLOGY_WORKFLOW.md`](RADIOLOGY_WORKFLOW.md) | Patient arrival → signed report in HIS/ERP/PACS. Steps S0–S11, five modalities, 23 failures each stating whether code can detect it, the automation-bias requirements, the API surface | **S4–S6 built** for MRI brain — dictation → draft → nine checks → named sign-off → export. S0–S3, S5's viewer and S7–S11 remain design |
+| 2 | [`PRODUCT_SPECIFICATION.md`](PRODUCT_SPECIFICATION.md) | Features, modules, clinical and commercial value, boundaries, release shapes, success metrics | M1 built in Alpha; the rest design |
 | 3 | [`SKILL_LIBRARY.yaml`](SKILL_LIBRARY.yaml) | 121 clinical skills, machine-checkable: risk, approval, audit, capability, status, blocker, examples | Design catalogue; **6** skills are authorised in code |
 | 4 | [`SKILL_EXAMPLES.md`](SKILL_EXAMPLES.md) | Twelve skills at wire level — the six highest-risk and six non-obvious output shapes | Design; all 12 currently return `unknown_skill` |
-| 5 | [`PROMPT_LIBRARY.md`](PROMPT_LIBRARY.md) | Six specialties, versioned prompts, constraints, output schemas, failure modes, evaluation | **1 running** (radiology `0.2.0`), 5 designs |
+| 5 | [`PROMPT_LIBRARY.md`](PROMPT_LIBRARY.md) | Six specialties, versioned prompts, constraints, output schemas, failure modes, evaluation | **1 running** (radiology `0.3.0`), 5 designs |
 | 6 | [`GOLDEN_DATASET.yaml`](GOLDEN_DATASET.yaml) | 100 representative studies, six-step scoring, pass thresholds, hallucination probes | Authored by an engineer; **`ratified: pending` on all 100** |
 | 7 | [`UI_UX.md`](UI_UX.md) | Eleven screens plus dark and tablet modes, PHI discipline, build order | Design |
 | 8 | [`ROADMAP.md`](ROADMAP.md) | Sprint 8–10, Beta gate G1–G9, v1, Enterprise, Cloud; risks with early warnings; what gets deleted | Plan |
@@ -22,7 +22,7 @@ as built; everything here is above it.
 | — | [`../integration/AI_ENTRY_POINTS_CARE_ERP.md`](../integration/AI_ENTRY_POINTS_CARE_ERP.md) | Every AI entry point in the CARE ERP, the one migrated in Sprint 8, its tests, rollback and measured latency | **Executed in the ERP working tree — not yet committed or merged.** The Gateway side (`usg-advisory-suggestions` in `models.yaml`) is here; the calling side is not, so no clinician can reach that skill from the ERP until the ERP change lands. Read §10 of that document before treating this migration as shipped |
 | — | [`../security/THREAT_MODEL.md`](../security/THREAT_MODEL.md) | Prompt injection, PHI leakage, malicious reports, hallucination, audit bypass, privilege escalation, residency, recovery | Assessment with five ranked findings |
 
-## Executive summary, in the ten numbers that matter
+## Executive summary, in the numbers that matter
 
 | | |
 | --- | --- |
@@ -33,7 +33,9 @@ as built; everything here is above it.
 | Requiring human approval | **116 of 121** |
 | Golden evaluation studies | **100** (15 normal · 20 emergency · 40 common · 15 rare · 10 medicolegal) |
 | …ratified by a clinician | **0** |
-| Prompts running in code | **1** — `radiology-report-draft/0.2.0` |
+| Prompts running in code | **1** — `radiology-report-draft/0.3.0` |
+| Deterministic safety checks on a draft | **9**, run three times (draft, every edit, before signature). Six of them can refuse the sign-off; none of them asks the model |
+| Tests in the repository | **717** — 492 Gateway, 225 copilot, all green, all in CI |
 | Real-model latency measurements | **0.** The only timing taken is 27–30 ms against a stub |
 | Ungoverned direct-to-model paths at the customer | **at least 4**, of which one uses a vision model and one selects its model from an environment variable |
 
@@ -47,12 +49,15 @@ are cheap relative to what they unlock.
 a report can be traced to the model, alias, prompt version and request that produced it, and
 to the human who accepted or rewrote it — and nothing the AI produces is a decision.
 
-**The first sprint worth doing** is about a week long and adds no new capability: time a real
-model on the hospital's own hardware, then point the one AI feature clinicians at CARE
-Diagnostics already use — the ultrasound studio's per-organ chips — through the Gateway
-instead of straight at Ollama. It converts a live ungoverned path into a governed one, deletes
-application-side model selection, and produces the first measurement on which the rest of this
-roadmap depends.
+**The next sprint worth doing** adds no new capability either, and it is the same one the
+roadmap has named since Genesis Night: time a real model on the hospital's own hardware. Two
+things have changed since that sentence was written — Sprint 8 governed the ultrasound chip
+path (in the ERP's working tree, not yet merged), and Sprint 9 shipped a product a radiologist
+can actually open and use. So the measurement is no longer only about tokens per second. It is
+twenty consecutive MRI brains through the copilot on the clinic's machine, with a radiologist
+recording how often they reached for the keyboard: rewrite rate, blocking findings per study,
+and wall time. That single afternoon produces the first evidence for every claim in this
+folder, and it is the cheapest item in the roadmap.
 
 ## Product vision
 
@@ -111,13 +116,17 @@ The full list is in the Genesis Night report; the four that matter most:
 2. **P16's single AI boundary is contradicted by the customer's own systems** — four live
    direct-to-model paths, including an image-grounded MRI drafting pipeline the Gateway cannot
    host because it has no vision capability and no job model.
-3. **The ERP's clinical document model is better than FutureKind's.** `ShadowStructuredDraft`
-   has laterality, negation and evidence anchors; `RadiologyReport` has five prose strings.
-   Adopt, do not invent.
+3. **The ERP's clinical document model is still better than FutureKind's.** `ShadowStructuredDraft`
+   has laterality, negation and evidence anchors as *fields*; `RadiologyReport` has six prose
+   strings and nine checks that compare them with the submitted text. The checks are a
+   second-best answer, not the same answer: a regex over prose misses `two lesions`, and prose
+   cannot say *which* lesion a measurement belonged to. Adopt the ERP's shape (roadmap §3,
+   deferred into Sprint 10) rather than growing the prose to compensate.
 4. **Audit is advertised in three places and retained in none.** Until `core/audit` writes and
    a retention period exists, the honest wording is "emits".
 
 ---
 
-*FutureKind · Genesis Night · 2026-10-08. Documents in this folder are design work by an
-engineer and contain no clinician-ratified content. Nothing here is a clinical instruction.*
+*FutureKind · Genesis Night · 2026-10-08. These documents are engineering work; the code that
+has landed out of them is M1, the radiology copilot. Nothing in this folder has been reviewed by
+a clinician, and nothing here is a clinical instruction.*

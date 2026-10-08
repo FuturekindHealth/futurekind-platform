@@ -93,7 +93,7 @@ deterioration, not the loudest referral text (workflow B1).
 | --- | --- |
 | Purpose | Propose report text into fields, without ever owning them |
 | User | Reporting clinician |
-| Layout | Right column, four blocks matching the four model-authored sections. Each block has: proposed text, *accept into field* / *discard*, and a per-block diff against what the field already held. Below: `redraft with a note` (the only steer a human may give) |
+| Layout | Right column, five blocks matching the five model-authored sections (technique, findings, impression, recommendations, follow-up). Each block has: proposed text, *accept into field* / *discard*, and a per-block diff against what the field already held. Below: `redraft with a note` (the only steer a human may give) |
 | Input shown | Modality, study, the recorded clinical indication (read-only, greyed, labelled *"referrer's words"*), technique if supplied, dictated observations verbatim |
 | Actions | Draft · redraft with note · accept per section · discard all · dictate manually |
 | States | Idle · in flight (elapsed seconds counting; nothing disabled) · refused-with-reason · partial (never: a draft with a missing section is not offered) · truncated · degraded |
@@ -129,15 +129,29 @@ report" is literally visible.
 | --- | --- |
 | Purpose | The one screen where a machine output becomes a clinical document |
 | User | One individually authenticated clinician |
-| Layout | Four sections final text; **diff against the model's original per section**; provenance summary (model, alias, prompt version, attempts, degraded); the AI- involvement line rendered on the preview; name and registration pre-filled from the session; one button |
+| Layout | Six sections' final text; **diff against the model's original per section**; the nine quality findings and the computed confidence, each naming its section; provenance summary (model, alias, prompt version, attempts, degraded); the AI-involvement line rendered on the preview; name and registration pre-filled from the session; one button |
 | Actions | Sign · sign with comment · return for edit · re-draft |
 | Button label | *"I, Dr <name>, accept these sections as my clinical opinion"* — the attestation is in the control, not in a modal someone clicks through |
-| Hard rules | No keyboard shortcut reaches sign without focus in the pane. No bulk sign. No signing action that also drafts. If any section is unaccepted, the button reads *what is missing*, not *Sign*. Numbers in a report (sizes, counts, scores) are typed, never accepted (§4 of the workflow) |
+| Hard rules | No keyboard shortcut reaches sign without focus in the pane. No bulk sign. No signing action that also drafts. If any section is unaccepted, the button reads *what is missing*, not *Sign*. Numbers in a report (sizes, counts, scores) are typed, never accepted (§4 of the workflow) — and since Sprint 9 the server enforces the same rule independently: an unsupported measurement is `blocking`, and `POST /review` refuses it whether or not the screen remembered to disable anything |
 | States | Ready · blocked (missing sections / no individual identity in session) · signed · signed-and-amended · withdrawn |
 | Failure presentation | If the ERP will not accept the signature (role is `typist|ai|system|bot`, `radiologyD1FinalWriter.ts:76`), the screen names the reason. It must not look like a successful sign that failed downstream |
 | Latency | < 2 s. Sign-off that feels expensive gets batched |
 | Audit | Copilot `metadata.review` (who, when, which sections rewritten) **and** the ERP's own signature columns. Both, keyed by the same `report_id` |
 | Identity requirement | **Blocking for Beta.** Today the USG studio's signer name is a clinic-level *setting* and one shared PIN authenticates the room (`auth.ts:10-27`, `schema.prisma:91-93`). A signature must come from a login, not a configuration row |
+
+**Built, in interim form (Sprint 9).** The Alpha copilot serves its own working screen at
+`GET /` — `apps/radiology_copilot/src/futurekind_radiology/static/index.html`. It is the layout
+above with three columns: the submission and its previous reports, the six editable sections
+with the signer's name, and the quality findings with the computed confidence and the
+provenance. It debounces into `POST /check` while the clinician types, and a blocking finding
+disables the sign button. No shortcut reaches sign, no bulk action exists, and the button is
+refused server-side as well as on screen.
+
+What it is **not**, and must not be mistaken for: the ERP-integrated Approval Screen; an
+individually authenticated identity (the name is typed, which is exactly the F-A defect
+above); the per-section diff against the model's original text; a screen designed for the
+radiologist's own monitor at 4pm with eleven other tabs. It exists so the workflow can be used
+and measured today, and it is deliberately throwaway once the studio has the real pane.
 
 ## 7. Audit Timeline
 
@@ -246,7 +260,7 @@ workspace.
 | Order | Screen | Why this order |
 | --- | --- | --- |
 | 1 | **AI Draft pane, in chip form, inside the existing USG studio** | The studio already has the composer, the queue, the audit and the PACS return. One pane, routed through the Gateway, converts a live direct-to-model path into a governed one. Smallest change, real clinical value |
-| 2 | Approval Screen | Without it, the product cannot honestly say a human signed it — and P11 is the requirement, not a nice-to-have |
+| 2 | Approval Screen | Without it, the product cannot honestly say a human signed it — and P11 is the requirement, not a nice-to-have. **Interim half shipped in Sprint 9:** the copilot's own screen does the review, the blocking gate and the attestation name; the ERP-integrated pane with a session-bound signer is what remains |
 | 3 | Study Queue (with triage) | Triage is the second-most-visible AI value and the easiest to demonstrate to a department |
 | 4 | Audit Timeline | Needed the first time someone asks "which model wrote this", which will be in week one |
 | 5 | Comparison Viewer integration | Mostly host-side wiring of an existing OHIF launch |

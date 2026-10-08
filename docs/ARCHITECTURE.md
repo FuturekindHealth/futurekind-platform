@@ -254,7 +254,7 @@ to prevent. `scripts/doctor/check-citations.py` now catches that.
 | Box in this document | Status on 2026-10-08 |
 | --- | --- |
 | FutureKind Gateway (`core/gateway/`) | **Built and tested** — 492 tests: catalogue, policy, routing, LiteLLM transport, OpenAI-compatible door, logs and metrics |
-| Radiology Copilot (`apps/radiology_copilot/`) | **Built and tested** — 160 tests: draft, review, sign, export. In no compose file yet |
+| Radiology Copilot (`apps/radiology_copilot/`) | **Built and tested** — 225 tests: draft, grounding checks, review, sign, export; 6 over real sockets. In no compose file yet |
 | LiteLLM, PostgreSQL, Redis, Qdrant, Open WebUI | **Defined in `compose.yaml`**, which is the only compose tree; not started on any host from this repository, because no container daemon was available during development, so the deployment path is validated by parsing and by `docker compose config` in CI rather than by booting |
 | Audit | **Emitted, not retained.** `skill_audit` log lines exist; no storage is configured. Register row 4, and the reason Beta has a gate |
 | Authentication, Authorization, Permissions, Notifications, Secrets, SDK, CLI | **Not built.** `core/{auth,audit,cli,config,notifications,sdk}` held no files and are removed from the working tree; the Gateway's only credential is a shared API key (ADR-0004 pending) |

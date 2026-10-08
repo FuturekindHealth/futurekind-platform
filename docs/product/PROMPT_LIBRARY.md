@@ -5,7 +5,7 @@ designs.** Say which is which, or the file becomes a list of intentions.
 
 | Specialty | Prompt id | Version | Where it lives | Runs today |
 | --- | --- | --- | --- | --- |
-| Radiology | `radiology-report-draft` | `0.2.0` | `apps/radiology_copilot/src/futurekind_radiology/prompt.py:26,33-62` | **Yes** |
+| Radiology | `radiology-report-draft` | `0.3.0` | `apps/radiology_copilot/src/futurekind_radiology/prompt.py:36,43-82` | **Yes** |
 | Pathology | `pathology-report-draft` | `0.1.0` | design only | No |
 | Acute medicine | `clinical-summary-draft` | `0.1.0` | design only | No |
 | Emergency | `ed-impression-draft` | `0.1.0` | design only | No |
@@ -34,7 +34,7 @@ real system found. A new prompt that drops one needs an ADR, not a review commen
    sections *including* the indication, and a live run in Sprint 7 showed it rewriting the
    referrer's question into its own words. The fix was structural, not verbal — the
    indication is taken from the submission and is not a model-owned key
-   (`report.py::MODEL_SECTION_KEYS` is four, not five).
+   (`report.py::MODEL_SECTION_KEYS` is five, not six).
 6. **No identifiers.** Never invent a name, number, MRN, UHID or accession. The
    application supplies identifiers in metadata; the model never sees and never writes
    them (workflow D3).
@@ -46,7 +46,7 @@ real system found. A new prompt that drops one needs an ADR, not a review commen
 **And one thing the library does not yet have.** There is no house-style document. The
 trees that were going to hold it — `genesis/report_style.md`,
 `agents/radiology/style-guide.md` — were zero-byte files and files containing the letters
-`ai`, and were deleted on 2026-10-08 (see `ROADMAP.md` §10). `prompt.py:9-13` says so
+`ai`, and were deleted on 2026-10-08 (see `ROADMAP.md` §10). `prompt.py:14-19` says so
 plainly: there is no house style to encode.
 There is therefore **no house style anywhere in this repository** — no institutional
 voice, no measurement vocabulary, no department convention about "no opinion in the
@@ -57,17 +57,40 @@ style guide is a clinician's task and it is on the roadmap.
 
 ---
 
-## 1. Radiology — `radiology-report-draft/0.2.0` (running)
+## 1. Radiology — `radiology-report-draft/0.3.0` (running)
 
-**Purpose.** Turn one reporting clinician's dictated observations for one imaging study
-into a sectioned draft a radiologist can review line by line and sign.
+**Purpose.** Turn one reporting clinician's dictated observations for one imaging study,
+plus any previous report the department supplies, into a sectioned draft a radiologist
+can review line by line, check against what they submitted, and sign.
 
 **Skill and policy.** `radiology-report` → capability `reasoning` → alias `fk-reasoning` →
 `ollama/qwen3:14b`. Policy `{clinical_risk: high, approval_required: false,
 audit_required: true, allow_downgrade: false}`, ceiling 1024 completion tokens, 90 s
 timeout (`core/gateway/models.yaml:54-66`).
 
-**System prompt** (verbatim from `prompt.py:33-62`; `{sections}` is filled with the four
+**What changed in 0.3.0, and why it was not a free addition.** Sprint 9 asked for a
+report a radiologist can approve, and two things were missing from the output the brief
+named: follow-up as its own section, and a measured statement about how well the draft is
+supported by its own inputs.
+
+- `follow_up` is a fifth authored key, kept apart from `recommendations` because they are
+  two different acts: what to do now, and when to look again. One field invites the
+  interval to be swallowed by the paragraph of referrals, and an interval nobody writes is
+  an interval nobody books.
+- The number rule became a clause rather than a hope. `must_not_say` in the golden set is
+  dominated by invented sizes, and the old prompt covered it with "do not add a
+  measurement"; the new one says every number must appear in the observations or a supplied
+  prior, and forbids rounding a described lesion into a measured one.
+- Comparison became conditional on evidence. The prompt now states, in the user turn, that
+  no previous report was supplied when none was — silence on that point reads to a model as
+  permission, and "unchanged from prior" is the invention a reviewer is least likely to
+  catch.
+- Confidence is **not** a key. A model asked for its own confidence produces a number
+  uncorrelated with correctness, and putting it on a screen would teach radiologists to
+  trust the wrong figure. If a deployment returns `confidence` anyway, the application
+  records it as an extra key and refuses to show it (`quality.py`).
+
+**System prompt** (verbatim from `prompt.py:43-82`; `{sections}` is filled with the five
 JSON keys at call time):
 
 ```text
@@ -79,10 +102,16 @@ could reach a patient. So:
 
 - Write only what the supplied observations support. Do not add a finding, a
   measurement, a sign or a diagnosis that was not described.
+- Every size, count and index in your answer must appear in the observations or in
+  a previous report supplied below. Never state a number of your own, and never
+  round a described lesion into a measured one.
 - Carry every observation the clinician dictated into your findings section, in
   report prose. Dropping one is as dangerous as inventing one.
 - If the observations are incomplete, negative or uncertain, say so in the
   section that owns it rather than filling the gap.
+- Describe only what this study shows. Do not state that something is unchanged,
+  resolved, new or stable compared with an earlier scan unless that earlier report
+  is supplied below.
 - If the technique was not supplied, write "Technique not provided." in the
   technique section. Do not name a scanner, a sequence or a contrast protocol
   that was not given.
@@ -92,39 +121,55 @@ could reach a patient. So:
 - Use plain clinical prose inside each section. No markdown, no bullet symbols,
   no headings.
 - Write the impression as the clinical conclusion, not a restatement of the
-  findings.
-- If there is genuinely nothing to recommend, write "None." in the
-  recommendations section. Do not leave it empty and do not omit it.
+  findings. A finding the observations hedge as possible, subtle or uncertain stays
+  hedged in the impression; do not settle it.
+- Recommendations are what to do now. Follow-up is when to look again, and what
+  with. Keep them apart, because a surveillance interval buried in a paragraph of
+  referrals is an interval nobody books.
+- If there is genuinely nothing to say in a section, write "None." there. Do not
+  leave it empty and do not omit it.
 
 Reply with one JSON object and nothing outside it: no preamble, no explanation
-after the closing brace. It must contain exactly these four keys, each with a
+after the closing brace. It must contain exactly these five keys, each with a
 string value:
 
 {sections}
 ```
 
-**User turn** (`prompt.py:65-81`): `Study`, `Modality`, the recorded `Clinical indication`
+**User turn** (`prompt.py:85-126`): `Study`, `Modality`, the recorded `Clinical indication`
 labelled *"already recorded — context for you, not yours to rewrite"*, `Technique` (or the
-literal `Not supplied — write "Technique not provided."`), and the dictated observations
-under the header *"Observations dictated by the reporting clinician"*.
+literal `Not supplied — write "Technique not provided."`), the previous reports under
+*"Previous reports supplied for comparison"* — or, when there are none, the sentence
+*"Previous reports: none supplied. There is nothing here to compare against, so describe
+only what this study shows."* — and the dictated observations under *"Observations dictated
+by the reporting clinician"*.
 
 **Constraints the application enforces, not just asks for.** A prompt instruction is a
 hope; these are code, and this list is the honest boundary between the two:
 
 | Rule | Enforcement |
 | --- | --- |
-| Exactly four authored sections | `parse_model_answer` reports `missing_sections`; a draft with a missing key is not offered for signing |
+| Exactly five authored sections | `parse_model_answer` reports `missing_sections`; a draft with a missing key is not offered for signing |
 | Extra keys are not merged | recorded in `metadata.extra_sections` and discarded |
 | Section values are strings or lists of strings | numbers and objects are refused (`_section_text`) |
 | No truncation | `finish_reason == "length"` → `ReportTruncatedError`; a cut-off impression is the most dangerous artefact the product can make |
 | Indication is not model-owned | taken from the submission in `_assemble`, never from the answer |
 | A supplied technique beats the model's | `technique_from` records `department` or `model`, and the department line wins |
 | Governance precedes parsing | `_check_governance` runs *before* `_parse` — an unaudited or degraded answer is refused even if its JSON is perfect |
+| Every number traces to the submission | `unsupported_measurement` blocks a size or count in findings/impression that appears nowhere in what was supplied, comparing whole numeric tokens — a dictated `19 mm` does not ground a drafted `9 mm`, and the `2` of `T2` grounds nothing; the same number in a plan section is advisory, because "review in 12 months" is not a measurement |
+| Nothing is dropped from the dictation | `dropped_observation` compares each dictated unit against the draft, on word stems so a plural is not an omission |
+| A comparison needs a prior | `invented_history` blocks comparison language when `previous_reports` is empty |
+| A hedge stays a hedge | `unsupported_certainty` blocks an absolute in the impression when the submitted text hedged — and does not fire on "cannot be excluded", which is a hedge |
+| Markup is refused | `format_breach` blocks markdown, bullets or headings inside a section |
+| No invented identities | `invented_identifier` blocks a name or a long digit sequence that was not submitted |
+| A blocking finding cannot be signed | `copilot.review` re-runs the checks on the text being signed and refuses `422` — with check names and sections, never the clinical text |
+| A clinician's rewrite is not overruled | findings in a section the radiologist rewrote drop to advisory: the image, not the dictation, is their source |
 
 **Output schema.**
 
 ```json
-{ "technique": "string", "findings": "string", "impression": "string", "recommendations": "string" }
+{ "technique": "string", "findings": "string", "impression": "string",
+  "recommendations": "string", "follow_up": "string" }
 ```
 
 **Known failure modes** (all observed here or designed against):
@@ -133,11 +178,21 @@ hope; these are code, and this list is the honest boundary between the two:
 | --- | --- | --- |
 | R-1 | Rewrites the clinical indication | **Observed live in Sprint 7.** Fixed structurally, clause 5 remains as a second line of defence |
 | R-2 | Answers in prose, or adds "Here is the report:" before the brace | fixtures `prose_answer.txt`, `wrapped_answer.txt`; parser refuses and the UI shows the reason |
-| R-3 | Drops a dictated organ to tighten the prose | observed in parsing tests; clause 3 plus the Fidelity score in `GOLDEN_DATASET.yaml` |
+| R-3 | Drops a dictated organ to tighten the prose | observed in parsing tests; now enforced by `dropped_observation`, not only asked by clause 3 |
 | R-4 | Names a plausible scanner/protocol when technique was not supplied | clause 4; `N-04`, `N-11` probe it |
-| R-5 | States an absence the study cannot exclude ("no pulmonary embolism") | the whole `must_not_say` column; strongest in CTPA and MRI cases |
+| R-5 | States an absence the study cannot exclude ("no pulmonary embolism") | the whole `must_not_say` column; `unsupported_absence` raises it as advisory against the study profile |
 | R-6 | Runs out of tokens mid-impression | `max_completion_tokens: 1024`; F4 in the workflow catalogue |
-| R-7 | Invents a measurement (a 14 mm nodule where the dictation said "small") | the highest-weighted `must_not_say` pattern; a clinician must type every number |
+| R-7 | Invents a measurement (a 14 mm nodule where the dictation said "small") | the highest-weighted `must_not_say` pattern; now **blocked** by `unsupported_measurement`, and a sign-off over it is refused |
+| R-8 | Describes interval change with no prior supplied | the new Sprint 9 finding; blocked by `invented_history`, and the user turn says plainly that there is nothing to compare against |
+| R-9 | Settles a hedged finding into a diagnosis | C-16 and R-12 `must_not_say`; blocked by `unsupported_certainty` |
+| R-10 | Reports its own confidence | refused as authority: recorded in `extra_sections`, surfaced as an advisory, never shown as the document's confidence |
+
+**Limits of these checks, stated where they are used.** Every rule above is a comparison
+of text against text. None of them has seen the images, none can tell a radiologist that
+a described lesion is in the wrong place, and a draft can pass all nine and still be
+clinically wrong. So the document never says "correct" — it says which statements trace to
+what was submitted, which do not, and refuses a signature while one of the second kind is
+standing. A green light is exactly what this engine must not become.
 
 **Evaluation criteria.** The six-step rubric in `GOLDEN_DATASET.yaml` (Structure, Safety,
 Fidelity, Conclusion, Action, Latency), against 100 cases; thresholds proposed as
@@ -508,7 +563,7 @@ changing what was said.
 2. **Not configurable by a caller.** A client may not send a system prompt, override the
    version, or name a model (`422`, ADR-0002 rule 1). The one legitimate steer is
    `extra_instructions` on a redraft — appended to the *system* turn by the reviewing
-   clinician, recorded, and available only in a human-initiated re-draft (`prompt.py:96-101`).
+   clinician, recorded, and available only in a human-initiated re-draft (`prompt.py:142-145`).
    Everything else about the prompt is chosen by the deployment, never the request.
 3. **Not a place for patient data.** The user turn carries the dictated observations
    because that is the task, and the submission schema has no identifier field at all

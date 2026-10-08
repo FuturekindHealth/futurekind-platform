@@ -34,11 +34,17 @@ vision and leaving it un-governed is not a decision, it is drift.
 **Alpha, built and verified:** Gateway with skill/capability/policy/alias/model namespaces,
 alias contract checked at startup, OpenAI-compatible interface, fail-closed parsing, provenance
 and policy on every answer, golden fixtures and an end-to-end test through three real uvicorn
-processes. 100 golden studies designed (unratified). 121 skills designed (6 authorised).
+processes; CI on every push running both suites (492 Gateway + 225 copilot tests), ruff, the
+citation check and an image build. The radiology copilot now runs one complete clinical
+workflow — MRI brain — end to end in a browser a radiologist can use: submit, draft, edit,
+nine deterministic grounding checks, a sign-off that refuses an unsupported draft, export.
+Public-facing hygiene is done: LICENSE, README, SECURITY.md, issue templates, and no live
+infrastructure identifier in the tracked tree.
+100 golden studies designed (unratified). 121 skills designed (6 authorised).
 **Not built:** audit retention, approvals, individual identity, a real-model latency number.
 
-The honest summary: **the platform layer is finished, the clinical layer is proven once, and
-nothing has been measured on the hardware this will actually run on.**
+The honest summary: **the platform layer is finished, the clinical layer is usable and proven
+once, and nothing has been measured on the hardware this will actually run on.**
 
 ---
 
@@ -58,6 +64,14 @@ nothing has been measured on the hardware this will actually run on.**
 > workstation was **3.9 tokens/s** (`gemma3:12b`), so a ~380-token chip answer takes ~100 s —
 > governance itself cost ~0.2 s, the model costs everything. The chip budget must be re-measured
 > on the clinic's own box before `ff_radiology_usg_ai_assistant` is switched on there.
+
+> **Also executed in this repository on 2026-10-08** was the release-readiness half that the
+> roadmap had not itemised: the Apache-2.0 licence, `README.md`, `SECURITY.md`, the contributing
+> guides and issue templates, CI running both suites and building the image, the inventory
+> endpoints authenticated (8.4), and every live infrastructure identifier removed from the
+> tracked tree (tip `4ef5dd3` on `develop`). **The published history was not rewritten**, so
+> what was tracked before that commit is still reachable there — rotating a deployed credential
+> is the operator's task, and no `filter-branch` does it for them.
 
 > *"The next implementation sprint MUST be the smallest possible sprint that delivers real
 > clinical value."* This is that sprint.
@@ -89,7 +103,46 @@ wrong interaction (a clinician will not wait per organ). Then ship the whole-rep
 CT/MRI first and keep the USG chips ungoverned but *explicitly deferred*, rather than shipping
 a laggy chip UI and teaching the department to switch the AI off.
 
-## 3. Sprint 9 — one document model, not three
+## 3. Sprint 9 — the first clinical product
+
+> **EXECUTED 2026-10-08** on `feature/radiology-copilot-alpha`. The brief was explicitly *not*
+> a platform, documentation or architecture sprint: build the first usable FutureKind product,
+> and let everything revolve around a radiologist reading one study. Gateway, LiteLLM, policy,
+> routing, provider interfaces, compose, ADRs and the constitution were frozen unless an
+> actual bug blocked implementation — none did, so none of them changed.
+>
+> This section was written before that brief existed and planned a different sprint ("one
+> document model, not three"). The sprint that ran did not follow it, so the plan is recorded
+> below under *what the original plan deferred* rather than quietly rewritten.
+
+**What shipped.** MRI brain, the whole way through:
+
+* `submission.py` — previous reports as input (≤5, ≤2 000 characters each, ≤6 000 total), with
+  the whole submission defining the grounding text every check compares against.
+* `report.py` — a sixth signed section (`follow_up`), plus `quality` and `confidence` inside the
+  document, and `metadata.profile` / `metadata.compared_with`.
+* `quality.py` — nine deterministic checks over the draft's own text: dropped observation,
+  unsupported measurement, invented history, unsupported certainty, unsupported absence, format
+  breach, invented identifier, self-reported confidence, structure coverage. No model grades the
+  model, no thresholds, no nondeterminism.
+* `profiles.py` — the MRI brain study profile: 14 structures with synonyms, and the negatives a
+  brain study cannot support.
+* `copilot.py` — the sign-off gate. Checks re-run on the text being signed; a `block` finding
+  refuses the signature; a section the clinician rewrote is downgraded to `advisory`; the
+  refusal carries check names and section names and no clinical text.
+* `prompt.py` `0.3.0` — the number rule, the comparison rule, the hedge rule, follow-up kept
+  apart from recommendations. The same prompt, versioned up; no second prompt was created.
+* `api.py` + `static/index.html` — `POST /check` and the working screen. One static file, no
+  external resource, no browser storage.
+* `rendering.py` — quality and confidence in all three export formats, so a printed report
+  shows what was checked.
+* Tests: 225 in the copilot (45 of them on the quality engine), including negative,
+  malformed-input and safety cases, and the six golden MRI brain cases.
+
+**The claim this earns:** open the copilot, paste findings, get a structured report, review it,
+approve it, export it — with no infrastructure, architecture or release work in the way.
+
+### What the original plan deferred
 
 The ERP already has the better shape (integration I1/I2). Adopt it; do not invent.
 
@@ -116,6 +169,12 @@ closes the threat model's only "not detectable" row, and one fewer place a repor
 **Total: 7–9 d plus a radiologist's afternoons.** This is the highest-value sprint in the
 document: everything after Beta is gated on evidence that does not exist yet.
 
+**Carried into this sprint from §3:** the document-model half that Sprint 9 did not reach —
+structured findings with typed `laterality` / `negated` / `measurements`, the write into the
+ERP's existing draft row under its lock, and `GET /reports`. Laterality and negation as *fields*
+would replace two of the copilot's nine regex checks with something that cannot be fooled by
+prose, so the deferred plan is now also the quality engine's next step.
+
 ## 5. Alpha → Beta gate
 
 Beta is a **claim change**, not a feature set: in Alpha the copilot says "a human reviewed
@@ -130,7 +189,7 @@ human granted it". To make that sentence true:
 | **G4** | Orthanc authenticated, CORS restricted, port not published (threat model F-C) | Hospital config, **hours** | — |
 | **G5** | Golden set ratified (Sprint 10) and the emergency/medicolegal safety gate passing | see Sprint 10 | — |
 | **G6** | Study Queue + `/triage` with documented degradation to acquisition order | 4–6 d | 8.0 latency |
-| **G7** | Approval Screen and Audit Timeline as specified (`UI_UX.md` §6, §7) | 5–8 d | G1–G3 |
+| **G7** | Approval Screen and Audit Timeline as specified (`UI_UX.md` §6, §7) | 5–8 d | G1–G3. **Half met:** the copilot ships a working review-and-sign screen with the nine checks, the computed confidence and the blocking gate (`static/index.html`, `POST /check`). What remains is the ERP-integrated screen, the Audit Timeline, and a signer bound to a session rather than a typed name |
 | **G8** | `/events` receiver (HMAC verify + idempotency + correlation) so withdrawals reach us | 2–3 d | integration §5 |
 | **G9** | 10–15 skills authorised in `models.yaml`, each reviewed one at a time | 1 d per skill + clinical review | clinical owner time — the true bottleneck |
 
@@ -232,11 +291,18 @@ Prefer deleting complexity, so the list is part of the plan.
 
 ```
 Sprint 8  measure latency → govern the USG chip path → fix the mapping → close the 3 leaks
-Sprint 9  one document model (adopt the ERP's), report read/search
-Sprint 10 ratify the goldens, run them for real, baseline the workflow
+          EXECUTED. The chip path is governed in the ERP working tree (uncommitted); the three
+          inventory leaks are closed; the release-readiness pass landed in this repository.
+          The latency number is 3.9 tok/s on a workstation and is still not a hospital number.
+Sprint 9  THE FIRST CLINICAL PRODUCT — MRI brain in a browser: submit → draft → nine
+          grounding checks → named sign-off that refuses an unsupported draft → export.
+          EXECUTED 2026-10-08 on feature/radiology-copilot-alpha.
+Sprint 9' one document model (adopt the ERP's), report read/search — DEFERRED, not forgotten
+Sprint 10 ratify the goldens, run them for real, baseline the workflow, then 9'
 ─────────────────────────────── ALPHA ENDS HERE ───────────────────────────────
 Beta gate G1 identity · G2 approvals (ADR-0005) · G3 retention · G4 Orthanc · G5 evidence
-          G6 triage · G7 approval+audit screens · G8 events · G9 10-15 skills
+          G6 triage · G7 approval+audit screens (half met by the copilot's own screen) ·
+          G8 events · G9 10-15 skills
 ──────────────────────────────── Beta ────────────────────────────────────────
 v1        pathology · emergency · documentation/coding · authorisation tooling · PCPNDT surface
 Enterprise N installations, per-hospital policy, SIEM export, capacity ceilings
@@ -245,4 +311,7 @@ Cloud     managed skills and evaluation only. Never a place patient text goes.
 
 **If only one thing in this roadmap is done:** Sprint 8.0 and 8.1-8.3. It costs about a week,
 it converts a live ungoverned AI path into a governed one, and it produces the first real
-number about whether any of the rest of this document is possible.
+number about whether any of the rest of this document is possible. **That sentence is now a
+warning as much as a recommendation:** the product sprint happened, the screen works, and the
+number is still missing. A radiologist using this on real studies at real speed is the next
+unknown, and it is the one that decides whether any of it is usable.
