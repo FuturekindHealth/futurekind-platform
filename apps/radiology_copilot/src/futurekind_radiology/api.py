@@ -135,6 +135,24 @@ def create_app(copilot: RadiologyCopilot, *, settings: CopilotSettings | None = 
         contact={"name": "FutureKind"},
     )
 
+    @app.middleware("http")
+    async def no_response_is_cacheable(request: Request, call_next: Any) -> Any:
+        """Nothing this application answers may be stored between it and the clinician.
+
+        Every workflow response carries dictated or drafted clinical text, and a department
+        that puts the copilot behind its own proxy — or two radiologists sharing one
+        workstation, which is the normal case — must not be able to leave one patient's
+        report in the path between. The refusals count too: a 422 body naming which check
+        blocked a signature is the artefact most likely to be screenshotted into a ticket.
+
+        One rule for the whole surface rather than a header per route, because a route
+        added later is a route somebody forgot.
+        """
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        return response
+
     @app.exception_handler(RadiologyError)
     async def refusal(request: Request, exc: RadiologyError) -> JSONResponse:
         """Every refusal in the platform's one error envelope."""
@@ -194,8 +212,10 @@ def create_app(copilot: RadiologyCopilot, *, settings: CopilotSettings | None = 
                 status_code=200,
             )
         return HTMLResponse(
-            _SCREEN.read_text(encoding="utf-8"),
-            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+            # No per-route headers: `no_response_is_cacheable` above is the one authority for
+            # the whole surface, including this page — a stale copy of it on a shared
+            # workstation is how one patient's report gets read under another's name.
+            _SCREEN.read_text(encoding="utf-8")
         )
 
     @app.post(
