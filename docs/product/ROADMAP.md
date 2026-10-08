@@ -381,10 +381,27 @@ Prefer deleting complexity, so the list is part of the plan.
   characters of keyboard noise. Five were literally named `New Text Document.txt`; there was
   also an `er.txt`, a `4h.txt` and an `e.txt`. The brief was **delete the tree, or write it**,
   and writing it is clinical work this sprint was not allowed to invent, so it is deleted.
-  What remains is the actual task, unchanged: author the doctrine, starting with the house
-  style, and give `agents/<specialty>/agent.yaml` the schema R4 asks for. An empty
+  What remains is the actual task, now with its shape decided: author the doctrine, starting
+  with the house style, **inside the application that needs it** — R4 was adopted on 2026-10-09
+  with the rule that an Agent gets no directory of its own, because it is the name for the four
+  authoring files an application already ships (`prompt.py`, `profiles.py`, `report.py`, and the
+  specialty lists inside `quality.py`). See `docs/DOMAIN_MODEL.md` R4 and
+  `docs/product/PRODUCT_BIBLE.md` §6.1. An empty
   `genesis/report_style.md` next to a constitution that cites it was worse than its absence,
   because it made a style authority look like it existed.
+- **`quality.findings`, renamed to what it is.** The machine's objections are published as
+  `quality.findings` in the same file as the report's `findings` section
+  (`apps/radiology_copilot/src/futurekind_radiology/report.py:288-306`, `:376`), and R5 says the
+  clinical sense owns the word. The rename is a wire-contract change across `/draft`, `/check`,
+  `/review`, the screen and every golden assertion that reads it, so it is listed here rather than
+  done in prose: it needs a feature to carry it, and the interim containment is the naming rule in
+  `docs/DOMAIN_MODEL.md` R5 — *`findings` beside a section name is prose the clinician typed;
+  `findings` inside `quality` is the machine's objection.*
+- **The three authorised skills that nothing calls.** `pathology-review`, `clinical-chat` and
+  `summarize-document` are reachable configuration with no application behind them
+  (`docs/architecture/APPLICATION_MAP.md` §4). Either an application names each one or its stanza
+  comes out of `core/gateway/models.yaml`. A skill a script can call and a clinician cannot is the
+  platform's own version of the ungoverned path this roadmap exists to close.
 - **The duplicate idea** `plain-language-report` vs `patient-explainer` in
   `SKILL_LIBRARY.yaml` — one capability seen from two screens; merge when either is authorised.
 - **Any `tier` field** on a model — `ADR-0002:155` refused it for having no data behind it, and
@@ -418,3 +435,81 @@ number about whether any of the rest of this document is possible. **That senten
 warning as much as a recommendation:** the product sprint happened, the screen works, and the
 number is still missing. A radiologist using this on real studies at real speed is the next
 unknown, and it is the one that decides whether any of it is usable.
+
+---
+
+## 12. The product family roadmap (Genesis Night 3)
+
+**Owns here:** the sequence across applications. `PRODUCT_BIBLE.md` owns *which* applications exist,
+`CLINICAL_SUITE.md` owns each one's design, `../architecture/APPLICATION_MAP.md` owns what each calls,
+`../safety/CLINICAL_SAFETY.md` §6 owns the gates, `../business/COMMERCIAL_ROADMAP.md` owns what sells, and §2–§11 above
+own the radiology sprints and the Alpha→Beta gates. Nothing in this section adds a platform
+requirement; §1 of the Bible and §1 of the map both say an application is a credential plus a skill
+name (`../SPECIFICATION.md:668-669`).
+
+Effort is in the same units as §2–§4, calibrated to the only application that has been built: the
+radiology copilot's drafting loop, checks, screen and export took three sprints of one focused
+person. A second copilot is that again minus the architecture and plus the specialty's authoring —
+so **the estimate is dominated by clinical review time, not by code**. Where a wave says "days", it
+means days that do not need a clinician; where it says "weeks", it means a clinician's calendar.
+
+### 12.1 The promotion rule
+
+An application moves from design to build when all five are true, in this order:
+
+| | Requirement | Gate |
+| --- | --- | --- |
+| 1 | Ratified cases for **that department**, with the signed report as the expected answer | `../safety/CLINICAL_SAFETY.md` G1 |
+| 2 | Its check set measured against correct drafts, with severities chosen from the numbers | G2, and the method exists: `scripts/validation/audit-checks.py` table 4 |
+| 3 | Its never-list implemented and tested, with a positive control on every absence-check | G3 |
+| 4 | Its failure modes driven live by a human before a clinician sees them | G4 |
+| 5 | A named clinical owner has confirmed the skill's risk, approval requirement and timeout | G5 — the gate the whole family is waiting on (`../DOMAIN_MODEL.md` Q6) |
+
+A build that starts before item 1 will produce a demo that cannot be authorised, and a demo that
+looks convincing is the most expensive artefact this family can make.
+
+### 12.2 The waves
+
+| Wave | Contents | Effort | Depends on | What it proves |
+| --- | --- | --- | --- | --- |
+| **0 — evidence, no new application** | The §4.2 afternoon: twenty MRI brains, one radiologist, one machine. Then the ERP walk for wards, theatre, ICU and discharge (`../architecture/APPLICATION_MAP.md` §7), and the baseline query on `radiology_studies` | 1 afternoon + 2 days | Nothing. The hardware and the clinician are the only inputs | Whether any of §2–§11 is true, and whether wave 1's assumptions are records rather than hopes |
+| **1 — the cheap second product, and radiology finished** | **Discharge Copilot** (`SKILL_LIBRARY.yaml:1343` and `:1355`); **two more radiology profiles** (CT head, US abdomen) each with its measured check audit; **structured findings** (item 9.1); the QA reading exposed over a period rather than a session | 2–3 weeks with clinical review | Item 1 of §12.1 per document. No new platform primitive | That a second application is authoring, not architecture — the claim `../architecture/APPLICATION_MAP.md` §2 makes and §12 has to falsify or keep |
+| **2 — the second department, and the revenue-adjacent one** | **Pathology Copilot** (skill already authorised: `core/gateway/models.yaml:68`); **Emergency drafting** (triage note, pathway record, instructions — *not* decision support); **Coding Assistant** behind the §6.4 rule | 3–6 weeks, mostly ratification | 20 ratified pathology reports; the `clinical_risk` confirmation; a payer-facing decision from the owner | That the checks port honestly rather than silently, and that the family can hold a boundary list a department will want to cross |
+| **3 — the identity-dependent tier** | **Clinical Timeline** and its audit view; **Tumour Board**; **Command Center**; Theatre and Critical Care copilots | Weeks to months, gated | ADR-0007 (identifier), ADR-0005 (approval), ADR-0003 (retention), G1 (per-user login) | Whether the hospital, rather than the department, trusts the platform |
+
+### 12.3 Not in any wave, and why
+
+| Excluded | Reason, and what would change it |
+| --- | --- |
+| **Medical Knowledge Assistant**, `guideline-citation` | Retrieval and citation do not exist (`../SPECIFICATION.md:903`). ADR-0006 first, and SPEC-08-05 before that |
+| **Medical Scribe** as a FutureKind application | No speech path exists, and adding one is a platform change this family is not authorised to make. The transcription stays where the hospital already runs it (`../integration/AI_ENTRY_POINTS_CARE_ERP.md:80`) |
+| **Clinical Search** as an AI feature | It is an ERP capability; a second index would be a second copy of patient text with different retention |
+| **PI-RADS, LI-RADS, Bosniak, SONAQ, Fazekas** | No skill, no profile, no case exists for any of them. Each needs §12.1's items 1 and 5 from a clinician — the moment a ratified profile and a ratified case exist, it becomes wave 1 work |
+| **Stroke decision support**, `neuro-stroke-thrombolysis-check` | `beta` on ADR-0005 by its own entry (`../product/SKILL_LIBRARY.yaml:696`), and the honest reason is that time-critical advice needs a verifiable signature |
+| **Autonomous recall or notification** | A notification is a timed clinical act needing an owner and a retention the platform does not have |
+| **Anything multi-tenant, cross-site or benchmark-shaped** | P14, `../CONSTITUTION.md:344-348`. An amendment, not a roadmap |
+| **More prose checks** | §4.1 measured a tenth check and rejected it. The next quality improvement is structured findings |
+
+### 12.4 One-page family sequence
+
+```
+WAVE 0   measure radiology for real  ·  walk the ERP for the other departments
+         ── no new application ships in this wave, and that is the point ──
+WAVE 1   Discharge Copilot  ·  CT-head + US-abdomen profiles  ·  structured findings
+         ·  QA reading over a period                    (no new primitive needed)
+WAVE 2   Pathology Copilot  ·  Emergency drafting  ·  Coding behind its own rule
+         ───────────────────────  ALPHA/BETA boundary: G1 · G2 · G3  ───────────────────────
+WAVE 3   Timeline + audit view  ·  Tumour Board  ·  Command Center  ·  Theatre, ICU
+         ── each one needs ADR-0005, ADR-0003 or ADR-0007, and says so in the product ──
+v1       the second hospital installs it from these documents, without a vendor in the room
+```
+
+### 12.5 The contradiction wave 1 inherits
+
+§4b's list still stands and the family does not dissolve it: **116 of 121 skills require an
+approval, the Gateway refuses a skill that declares one, and so every copilot in waves 1 and 2 runs
+the application-side substitute and labels it as one** (`docs/product/README.md:111-115`). The
+roadmap does not schedule a fix, because ADR-0005 is a decision the owner makes, not a task. What
+this section adds is a rule about the interim: **an application may attest and must not verify**,
+and the wording of the attestation belongs to `../design/DESIGN_SYSTEM.md` §7 rather than to whichever screen
+was written last.
