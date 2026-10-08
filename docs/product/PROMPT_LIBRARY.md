@@ -158,10 +158,10 @@ hope; these are code, and this list is the honest boundary between the two:
 | Governance precedes parsing | `_check_governance` runs *before* `_parse` — an unaudited or degraded answer is refused even if its JSON is perfect |
 | Every number traces to the submission | `unsupported_measurement` blocks a size or count in findings/impression that appears nowhere in what was supplied, comparing whole numeric tokens — a dictated `19 mm` does not ground a drafted `9 mm`, and the `2` of `T2` grounds nothing; the same number in a plan section is advisory, because "review in 12 months" is not a measurement |
 | Nothing is dropped from the dictation | `dropped_observation` compares each dictated unit against the draft, on word stems so a plural is not an omission |
-| A comparison needs a prior | `invented_history` blocks comparison language when `previous_reports` is empty |
+| A comparison needs a prior | `invented_history` blocks comparison language when `previous_reports` is empty. The phrase list requires a comparison that *dates* the finding — bare `previously`, `better than` and `worse than` were removed after `scripts/validation/audit-checks.py` refused two correct golden reports for them (`ML-06` dates a "previously healed" fracture; `R-11` gives a differential that "fits this pattern better than atherosclerosis"). "Unchanged" still blocks, and so does "as previously described" |
 | A hedge stays a hedge | `unsupported_certainty` blocks an absolute in the impression when the submitted text hedged — and does not fire on "cannot be excluded", which is a hedge |
 | Markup is refused | `format_breach` blocks markdown, bullets or headings inside a section |
-| No invented identities | `invented_identifier` blocks a name or a long digit sequence that was not submitted |
+| No invented identities | `invented_identifier` blocks a title followed by a capitalised name, an identifier word (`MRN`, `accession no`, `UHID`) or a digit run of six or more, none of which was submitted. The name form is case-sensitive on purpose: the earlier case-insensitive version read "MR spectroscopy" as "Mr Spectroscopy" and refused three of the 100 golden reports for naming their own protocol |
 | A blocking finding cannot be signed | `copilot.review` re-runs the checks on the text being signed and refuses `422` — with check names and sections, never the clinical text |
 | A clinician's rewrite is not overruled | findings in a section the radiologist rewrote drop to advisory: the image, not the dictation, is their source |
 
@@ -197,8 +197,15 @@ standing. A green light is exactly what this engine must not become.
 **Evaluation criteria.** The six-step rubric in `GOLDEN_DATASET.yaml` (Structure, Safety,
 Fidelity, Conclusion, Action, Latency), against 100 cases; thresholds proposed as
 emergency 100% safety/structure and ≥95% conclusion, medicolegal 100% safety and fidelity.
-**Unrun.** The set is authored but `ratified: pending` on all 100, and the only measurement
-taken so far is 27–30 ms against a stub LiteLLM, not a model.
+**No model has been run against them.** What has been run, in Sprint 10, is the quality gate
+over all 100 expected answers and over each of the 310 `must_not_say` probes
+(`scripts/validation/audit-checks.py`): the gate refused 1 of the 100 correct reports for an
+engine reason (`E-03`'s derived 72 mL mismatch, arithmetic on two dictated volumes) and the
+probes were newly blocked in 3 of the 306 measurable cases — every one of them by
+`unsupported_measurement`. That is the number behind the limits paragraph above, and it is
+why the checks are described as traceability rather than as hallucination detection. The set
+is still `ratified: pending` on all 100, and the only end-to-end timing taken so far is
+27–30 ms against a stub LiteLLM, not a model.
 
 ---
 

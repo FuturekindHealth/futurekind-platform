@@ -8,7 +8,77 @@ The format is based on Keep a Changelog.
 
 ## [Unreleased]
 
-Neither pass below is tagged; `develop` carries both.
+Nothing below is tagged; the feature branch carries all of it.
+
+### Sprint 10 — measured against reality, as far as this machine allows (2026-10-08)
+
+No architecture, no Gateway, no prompt redesign: the brief was to find out how the product
+behaves, and the two things available to measure here were the quality gate itself and the
+instrument that will one day measure a model.
+
+#### Added
+
+- **`scripts/validation/audit-checks.py`** — the nine checks run over all 100 authored goldens
+  and over each of their 310 `must_not_say` hallucination probes, with no model, no GPU and no
+  clinician. Two questions, both answerable today: does the gate refuse a correct report, and
+  does it notice a wrong one. Detection is a **paired** baseline→mutation delta — the first
+  version of this script was unpaired and reported 87%, which was arithmetic about the
+  baseline rather than about the probes.
+- **`scripts/validation/run-cases.py`** — the twenty-case harness: `export` the signed MRI
+  studies out of the existing studio database, `smoke` one draft to learn throughput before
+  committing an afternoon, `run` the machine stages, `session` the radiologist's review with
+  the clock running, `report` the table, the summary and the ranking. It is a client of the
+  four HTTP endpoints and imports nothing from the application. Clinical text is never written
+  to disk — identifiers are dropped on the way out and the export refuses a destination
+  inside a git working tree — so the results file holds counts, lengths, ratios and timings
+  only. Self-tested against a stand-in model over the live stack; four defects it found in
+  itself are fixed in the same commit (an editor opened with no terminal, a study label that
+  matched no profile, an epoch integer passed off as a date, and a refusal recorded without
+  its reason).
+
+#### Fixed
+
+- **`invented_identifier` read "MR spectroscopy" as *Mr Spectroscopy*.** Its title pattern was
+  case-insensitive, so the protocol names of three of the hundred golden reports were privacy
+  events. The name form now requires the capitalisation a person's name actually has; the
+  identifier form (`MRN`, `accession no`, a six-digit run) stays case-insensitive because that
+  is how identifiers are typed. A lower-case "mr smith" is consequently missed — the cheaper
+  failure, since an engine that refuses correct studies is a study signed through.
+- **`invented_history` refused a differential and a lesion date.** Bare `previously`, `better
+  than` and `worse than` were treated as comparisons with an earlier study, so R-11's "fits
+  this pattern better than atherosclerosis" and ML-06's "previously healed" fractures both
+  blocked with no prior supplied. The phrase list now requires a comparison that *dates* the
+  finding: "unchanged", "no interval change" and "as previously described" still block, and a
+  test holds each half open.
+
+#### Measured
+
+- Correct golden reports refused by the gate: **5 of 100 before the two fixes above, 1 after**
+  (`E-03`, whose 72 mL perfusion mismatch is arithmetic on two dictated volumes — correct, and
+  recoverable by rewriting the section, which is the human-downgrade path working as designed).
+- `must_not_say` probes newly blocked: **3 of 306 measurable (1%)**, every one by
+  `unsupported_measurement`; 269 of the 303 misses raise nothing at all. The nine checks
+  enforce traceability of numbers, identities, comparisons, certainty and deletions. They do
+  not detect an invented diagnosis, and a tenth check that could is not available: a word-level
+  version catches 85% of probes and flags 17 words on every correct report, and a
+  disease-name-only version catches 11% while still touching 41 of 100 correct answers — all 41
+  of them legitimate naming. The radiologist is the check; the gate's job is to say which
+  sentences trace to what was submitted.
+- A separate disagreement between the dataset and the gate: `dropped_observation` blocks 87 of
+  the 100 expected answers, because `expected_findings` averages 8 words against a `dictated`
+  input of 28. The column is a summary of the answer, not a transcription of the dictation. It
+  is reported as a property of the dataset and of the fidelity gate together, not as a defect
+  of either.
+
+#### Not measured
+
+Real-model latency, draft quality against a real dictation, edit distance, time to final
+report, typing reduction, acceptance: there is no Ollama, no LiteLLM and no radiologist on this
+machine, and four dev rows are not twenty cases. The procedure that produces those numbers is
+`docs/product/ROADMAP.md` §4.2.
+
+**721 tests — 492 Gateway, 229 copilot (46 of them on the quality engine, 6 over real
+sockets).**
 
 ### Sprint 9 — the first clinical product (2026-10-08)
 

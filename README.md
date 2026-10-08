@@ -81,7 +81,7 @@ is SPEC-10-04, deliberately left for ADR-0004 rather than changed mid-release.
 | Path | What it is | State |
 | --- | --- | --- |
 | `core/gateway/` | The Gateway: FastAPI service, catalogue, policy, routing, LiteLLM transport, OpenAI-compatible door, logging, metrics | **Built**, 492 tests |
-| `apps/radiology_copilot/` | The first clinical application on it: draft → check → review → sign → export for imaging studies | **Built**, 225 tests |
+| `apps/radiology_copilot/` | The first clinical application on it: draft → check → review → sign → export for imaging studies | **Built**, 229 tests |
 | `core/gateway/models.yaml` | The live catalogue: 6 authorised skills, their policy, and the aliases that serve them | Config, reviewed one skill at a time |
 | `configs/` | Platform manifest and LiteLLM's alias list | Config |
 | `compose.yaml` | One installation: postgres, redis, qdrant, litellm, gateway, open webui, behind profiles | Written and parsed; **never booted here** |

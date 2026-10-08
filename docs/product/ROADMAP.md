@@ -34,7 +34,7 @@ vision and leaving it un-governed is not a decision, it is drift.
 **Alpha, built and verified:** Gateway with skill/capability/policy/alias/model namespaces,
 alias contract checked at startup, OpenAI-compatible interface, fail-closed parsing, provenance
 and policy on every answer, golden fixtures and an end-to-end test through three real uvicorn
-processes; CI on every push running both suites (492 Gateway + 225 copilot tests), ruff, the
+processes; CI on every push running both suites (492 Gateway + 229 copilot tests), ruff, the
 citation check and an image build. The radiology copilot now runs one complete clinical
 workflow — MRI brain — end to end in a browser a radiologist can use: submit, draft, edit,
 nine deterministic grounding checks, a sign-off that refuses an unsupported draft, export.
@@ -136,7 +136,7 @@ a laggy chip UI and teaching the department to switch the AI off.
   external resource, no browser storage.
 * `rendering.py` — quality and confidence in all three export formats, so a printed report
   shows what was checked.
-* Tests: 225 in the copilot (45 of them on the quality engine), including negative,
+* Tests: 229 in the copilot (46 of them on the quality engine), including negative,
   malformed-input and safety cases, and the six golden MRI brain cases.
 
 **The claim this earns:** open the copilot, paste findings, get a structured report, review it,
@@ -174,6 +174,59 @@ structured findings with typed `laterality` / `negated` / `measurements`, the wr
 ERP's existing draft row under its lock, and `GET /reports`. Laterality and negation as *fields*
 would replace two of the copilot's nine regex checks with something that cannot be fooled by
 prose, so the deferred plan is now also the quality engine's next step.
+
+### 4.1 What was measured first, with no model and no clinician (2026-10-08)
+
+`scripts/validation/audit-checks.py` runs the nine checks over all 100 authored goldens and
+over each of their 310 `must_not_say` probes. Four numbers came out, two of them defects.
+
+| Measured | Result | What it changes |
+| --- | --- | --- |
+| Correct reports refused by the gate | **5 of 100 before the fixes, 1 of 100 after** | `invented_identifier` read "MR spectroscopy" as *Mr Spectroscopy* and `invented_history` read "fits this pattern better than atherosclerosis" as a comparison. Both fixed with a test per golden case; the residue is `E-03`, whose 72 mL mismatch is arithmetic on two dictated volumes and is recoverable by rewriting the section |
+| Probes newly blocked, paired against their own unmutated case | **3 of 306 measurable (1%)** — all three `unsupported_measurement` | The nine checks enforce traceability of numbers, names, comparisons, certainty and deletions. They do not detect an invented *diagnosis*, which is what most of the probe column is. 269 of the 303 misses raise nothing at all |
+| The same measurement without pairing | would have read 87% | A probe spliced into a case that already blocks reports itself as detected. The first version of the script claimed exactly that, and the number meant nothing |
+| A hypothetical tenth check | flagging **any** ungrounded word catches 85% of probes and adds 17 flagged words to every correct report; flagging only ungrounded **disease names** catches 11% and adds 0.59 per report, touching 41 of 100 correct answers — and every one of those 41 is legitimate naming ("haematoma" for a crescentic hyperdense collection) | Measured, not assumed: this is why the missing hallucination check is not a regex, and why the human remains the check. Recorded in `PROMPT_LIBRARY.md` as a limit, not a roadmap item to build blind |
+
+Still not measured, because neither is available on this machine: any real model latency,
+draft quality against a real dictation, and every number that needs a radiologist's afternoon.
+The instrument for those is `scripts/validation/run-cases.py`, self-tested against a
+stand-in model and the live stack; the procedure for running it for real is §4.2.
+
+### 4.2 Running it for real, on the clinic machine
+
+Twenty cases, one radiologist, one afternoon. Every file this writes holds numbers only; the
+clinical text stays in memory and the case file must live outside any git working tree.
+
+```bash
+# 1. the model and the two services, as they are deployed
+ollama serve & ollama pull qwen3:14b
+python -m futurekind_gateway                      # FK_GATEWAY_* as in deploy/
+python -m futurekind_radiology                    # FK_RADIOLOGY_GATEWAY_BASE_URL=…
+
+# 2. twenty real signed MRI brain studies, de-identified on the way out
+python scripts/validation/run-cases.py export \
+  --db /path/to/mri-reports/db/custom.db --out ~/fk-validation/cases.jsonl --limit 20
+
+# 3. one draft first. Read the seconds before running twenty.
+python scripts/validation/run-cases.py smoke --case-file ~/fk-validation/cases.jsonl
+
+# 4. the retrospective pass — no clinician, machine stages only
+python scripts/validation/run-cases.py run \
+  --case-file ~/fk-validation/cases.jsonl --out ~/fk-validation/run.json
+
+# 5. the session pass, in a terminal the radiologist types in: this is the mode that
+#    measures edit distance, time to final report and what they chose to change
+python scripts/validation/run-cases.py session \
+  --case-file ~/fk-validation/cases.jsonl --out ~/fk-validation/session.json \
+  --clinician "<name that goes on the report>"
+
+# 6. the table, the summary, and the ranking written before the run
+python scripts/validation/run-cases.py report --results ~/fk-validation/session.json
+```
+
+Steps 4 and 5 are both required: the difference between them is itself the finding, because
+step 4 scores the draft against the signed report the department already wrote and step 5
+scores it against what the reviewer actually did.
 
 ## 5. Alpha → Beta gate
 
