@@ -179,6 +179,58 @@ def audit_correct_reports(cases: list[dict]) -> dict:
     }
 
 
+# ---------------------------------------------------------- 1b. the load each check carries
+
+
+def _load_over(cases: list[dict], build) -> dict:
+    """One corpus's per-check load: how often it fires, and what it costs.
+
+    `sole_blocking_reason` is the number that decides a severity. A check that fires on
+    correct reports only *alongside* another blocking finding is free — the report was being
+    refused anyway. A check that is the only reason a correct report cannot be signed is the
+    one that spends the radiologist's trust, and a night's worth of those is a tool the
+    department routes around.
+    """
+    fired: defaultdict[str, Counter] = defaultdict(Counter)
+    for case in cases:
+        quality = run_engine(case, build(case))
+        for finding in quality.findings:
+            fired[finding.check][finding.severity] += 1
+        blocking = {f.check for f in quality.findings if f.severity == "block"}
+        for check in {f.check for f in quality.findings}:
+            fired[check]["cases"] += 1
+        if len(blocking) == 1:
+            fired[next(iter(blocking))]["sole_blocking_reason"] += 1
+    rows = {}
+    for check, counts in fired.items():
+        rows[check] = {
+            "cases_with_the_finding": counts["cases"],
+            "blocking_findings": counts["block"],
+            "advisory_findings": counts["advisory"],
+            "sole_reason_a_correct_report_could_not_be_signed": counts["sole_blocking_reason"],
+        }
+    ordered = dict(
+        sorted(
+            rows.items(),
+            key=lambda kv: -kv[1]["sole_reason_a_correct_report_could_not_be_signed"],
+        )
+    )
+    return {"cases": len(cases), "checks": ordered}
+
+
+def audit_check_load(cases: list[dict]) -> dict:
+    """The same measurement over both ways of building a correct draft.
+
+    `summary_answer` is the dataset's own short answer, `faithful_answer` carries the whole
+    dictation. The two differ in exactly one place — how much text the coverage check has to
+    find — and saying that in the output is why this reads both rather than picking one.
+    """
+    return {
+        "summary_answer": _load_over(cases, sections_of),
+        "faithful_answer": _load_over(cases, faithful_draft),
+    }
+
+
 # ------------------------------------------------------------------ 2. detection
 
 
@@ -391,12 +443,14 @@ def main(argv: list[str]) -> int:
     false_positives = audit_correct_reports(cases)
     detection = audit_detection(cases)
     candidate = audit_candidate_checks(cases)
+    load = audit_check_load(cases)
     result = {
         "dataset": args.dataset.name,
         "cases": len(cases),
         "correct_reports_refused": false_positives,
         "must_not_say_detection": detection,
         "candidate_tenth_check": candidate,
+        "check_load": load,
     }
 
     if not args.quiet:
@@ -457,6 +511,23 @@ def main(argv: list[str]) -> int:
         for key, rows in candidate["examples_on_correct_reports"].items():
             for row in rows[:3]:
                 print(f"     on {row['case']:6} ({key}): {row['flagged']}")
+
+        print("\n4. WHAT EACH CHECK COSTS ON A CORRECT DRAFT (severity decisions)")
+        print(
+            "   A check is worth its severity only if it is rarely the sole reason a correct\n"
+            "   report is refused. `summary` builds findings from the dataset's short expected\n"
+            "   answer; `faithful` carries the whole dictation, which is what a good model does."
+        )
+        header = f"   {'check':26} {'cases':>6} {'block':>6} {'advis':>6} {'sole':>5}"
+        for key, label in (("summary_answer", "summary"), ("faithful_answer", "faithful")):
+            print(f"   --- {label} answer, {load[key]['cases']} cases")
+            print(header)
+            for check, row in load[key]["checks"].items():
+                print(
+                    f"   {check:26} {row['cases_with_the_finding']:>6} "
+                    f"{row['blocking_findings']:>6} {row['advisory_findings']:>6} "
+                    f"{row['sole_reason_a_correct_report_could_not_be_signed']:>5}"
+                )
 
     if args.out:
         args.out.write_text(json.dumps(result, indent=2), encoding="utf-8")
