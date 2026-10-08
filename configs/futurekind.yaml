@@ -1,7 +1,11 @@
 name: FutureKind
 
-version: 0.1.0
-
+# The release line this repository is on. Not a version declaration: nothing reads
+# this file, so a number here could only ever drift. Each artefact declares its own
+# version where it is actually built —
+# core/gateway/src/futurekind_gateway/__init__.py and
+# apps/radiology_copilot/src/futurekind_radiology/__init__.py, both read by
+# [tool.hatch.version] — and the git tag is the platform version.
 codename: Genesis
 
 description: >
@@ -33,13 +37,22 @@ platform:
 
   ai:
 
-    gateway: LiteLLM
+    # "Gateway" is reserved for FutureKind's own service (docs/DOMAIN_MODEL.md R1).
+    # LiteLLM is what sits behind it, so it is named for what it does: routing an
+    # alias to a backend. configs/futurekind.yaml used to call LiteLLM "gateway",
+    # which argued with docs/ARCHITECTURE.md:54 in the platform's own manifest.
+    gateway: FutureKind Gateway
+
+    routing: LiteLLM
 
     interface: Open WebUI
 
     vector: Qdrant
 
-    tracing: Langfuse
+    # Langfuse is the intended trace store, not a running one. Nothing in this
+    # repository configures or deploys it (see docs/CONSTITUTION.md §7 row 4);
+    # claiming otherwise is what made a review document fiction.
+    tracing: planned
 
     search: SearXNG
 
@@ -47,11 +60,15 @@ platform:
 
   monitoring:
 
-    prometheus: true
+    # Prometheus, Grafana and an OTel collector are the intended observability
+    # stack. None is deployed: compose starts no such service, no scrape config
+    # exists anywhere in this repository, and the Gateway exposes /metrics but
+    # nothing reads it. `planned` is the honest value until D-C lands — ROADMAP 8.5.
+    prometheus: planned
 
-    grafana: true
+    grafana: planned
 
-    opentelemetry: true
+    opentelemetry: planned
 
 runtime:
 

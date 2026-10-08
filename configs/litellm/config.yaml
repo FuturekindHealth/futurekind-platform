@@ -19,4 +19,10 @@ general_settings:
 
   master_key: ${LITELLM_MASTER_KEY}
 
+  # Spend logging is off, so no per-request cost is recorded anywhere: LiteLLM's
+  # spend tables stay empty and the Gateway keeps no money figure either. The
+  # platform therefore does not have the budget enforcement its README used to
+  # attribute to this layer. Kept off deliberately — the spend log is a table of
+  # token counts keyed by virtual key, and until ADR-0004 issues per-application
+  # keys there is no caller identity worth recording. docs/CONSTITUTION.md §7 row 4.
   disable_spend_logs: true
