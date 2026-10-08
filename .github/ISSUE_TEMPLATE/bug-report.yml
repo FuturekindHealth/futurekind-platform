@@ -1,0 +1,66 @@
+name: "Bug report"
+description: "Something the platform does that the documents say it should not, or does not do that it says it will."
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A bug in a clinical platform is any gap between what this repository
+        **claims** and what it **does**. If your finding is that a document promises a
+        capability the code does not have — audit retention, approvals, streaming —
+        say so plainly; those gaps are already tracked in `docs/CONSTITUTION.md` §7 and
+        a new report helps by naming the file and line where the claim is made.
+
+        **Do not file a security problem here.** Use
+        [SECURITY.md](https://github.com/FuturekindHealth/futurekind-platform/blob/develop/SECURITY.md).
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, what you got, and the claim the repository makes about it.
+      placeholder: |
+        Expected: GET /models without a credential answers 401.
+        Got: 200 with the routing table.
+        The repository claims this at docs/SPECIFICATION.md SPEC-06-01.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction
+      description: Commands, request bodies or a test. Exact enough that someone else can run it.
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: "`GET /health` reports the Gateway version; a commit sha is better."
+      placeholder: e.g. v0.1.0-genesis or 1a2b3c4
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - Gateway (core/gateway)
+        - Radiology Copilot (apps/radiology_copilot)
+        - Catalogue / policy (models.yaml)
+        - Deployment (compose, Dockerfile, env)
+        - Documentation contradicting code
+        - Doctor script (scripts/doctor)
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >
+        OS and Python version, whether it runs in Docker, which backend answers
+        (Ollama host, model) — **redact addresses you would not publish**, name the
+        shape instead. No patient text, no identifiers, no PHI-adjacent content in
+        anything you paste here, including a report draft.
+    validations:
+      required: true

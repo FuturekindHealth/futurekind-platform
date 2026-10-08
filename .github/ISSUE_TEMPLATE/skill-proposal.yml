@@ -1,0 +1,67 @@
+name: "Skill proposal"
+description: "A clinical intent you want the platform to govern — the review queue, not the runtime."
+labels: ["skill-proposal", "clinical-review"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A skill becomes runtime configuration only after it is reviewed one at a time.
+        Most proposals should stop at
+        [`docs/product/SKILL_LIBRARY.yaml`](https://github.com/FuturekindHealth/futurekind-platform/blob/develop/docs/product/SKILL_LIBRARY.yaml)
+        — the design catalogue, which no process reads. Getting a skill into
+        `core/gateway/models.yaml` is a separate, slower act: it needs a clinical
+        owner's decision on risk, approval and audit, and its alias added to
+        `configs/litellm/config.yaml` in the same change.
+  - type: input
+    id: name
+    attributes:
+      label: Skill name
+      description: "Lowercase, hyphenated, an intent a clinician would recognise: `radiology-report`, not `ai-summariser`."
+    validations:
+      required: true
+  - type: textarea
+    id: intent
+    attributes:
+      label: What work is being done
+      description: >
+        One sentence in the clinician's words. A skill names what the application is
+        doing; it never names a model, a provider, a tier or a quality level.
+    validations:
+      required: true
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Clinical risk
+      description: "`high` or `critical` require the policy block to be stated, not defaulted."
+      options: [critical, high, moderate, low]
+    validations:
+      required: true
+  - type: dropdown
+    id: approval
+    attributes:
+      label: Does a named clinician have to approve before this output reaches a patient?
+      description: >
+        Note that the platform cannot currently *grant* an approval: a skill declaring
+        `approval_required: true` is refused rather than run (ADR-0005 is unwritten).
+        Proposing it anyway is correct — the refusal is the honest behaviour.
+      options: ["Yes", "No", "Depends on context — explain below"]
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Source of the requirement
+      description: >
+        Which workflow, which guideline, which hospital process needs this. A skill
+        copied from a model's capability rather than a stated task is not a proposal.
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What does a wrong answer look like?
+      description: >
+        The failure this skill could produce, and how a reviewer would notice it. This
+        is the field that decides whether the skill is safe to design at all.
+    validations:
+      required: true
