@@ -8,6 +8,7 @@ Genesis Night 4, 2026-10-09.
 | **Owns** | Decision rights, the clinical veto, the amendment machinery, the open-source strategy, the path to a foundation. |
 | **Does not own** | The principles being governed ([`CONSTITUTION.md`](CONSTITUTION.md)), the pricing and motions ([`business/COMMERCIAL_ROADMAP.md`](business/COMMERCIAL_ROADMAP.md)), the refusals ([`INVARIANTS.md`](INVARIANTS.md)). |
 | **Measured starting point** | `CONTRIBUTING.md` exists; there is no `CODE_OF_CONDUCT.md`, no CLA, no trademark policy, and **no file in this repository contains the word "foundation"** (checked across all tracked markdown). Governance is not weak here — it is unowned. |
+| **Drift check** | §6's five tripwires are greps or CI jobs, so this file is the one Night-4 document that can fail on its own terms. T1–T3 come from `CONSTITUTION.md` §6; T4–T5 are rules 4 and 2 of `README.md` §10, pointed at, not restated. The seats in §2 are a second instrument: a vacant seat is countable from the commit log. |
 
 ---
 
@@ -186,8 +187,8 @@ governance does not depend on anyone remembering to read a document.
 | T1 | A `model:` or `provider:` key appears in any request schema. | N1 has already been conceded in a corner of the codebase. |
 | T2 | Anything other than `core/gateway` accepts a completion request. | The single AI boundary (P16) is gone, and with it the audit claim. |
 | T3 | A principle has no ADR beneath it while a feature does. | The constitution has become commentary. |
-| T4 | **A new document names no check that fails when it drifts.** | It is a restatement, and restatements rot (`CONCEPTUAL_DEBT.md` §2.1). |
-| T5 | **A number appears in prose that is neither generated nor dated.** | It is already wrong somewhere (`FAILURE-MODES.md` FM8). |
+| T4 | **A new document names no check that fails when it drifts.** | Rule 4 of [`README.md`](README.md) §10 is being broken, and it is the rule that would have prevented most of `CONCEPTUAL_DEBT.md`. |
+| T5 | **A number appears in prose that is neither generated nor dated.** | Rule 2 of the same index. `FAILURE-MODES.md` FM8 is the consequence. |
 
 ---
 

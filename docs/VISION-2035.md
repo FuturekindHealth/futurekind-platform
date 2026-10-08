@@ -140,7 +140,9 @@ section that will be easy to check in 2035.
 | 2027 | A measured baseline: dictation-complete to signed, from the ERP's own timestamps | Without it, "finishes reporting earlier" is a sentence about a product nobody timed |
 | 2028 | Ratified cases per department — at minimum pathology, discharge and one ward document | All 100 golden cases today are imaging; thirteen applications have no evaluation |
 | 2028 | Individual authentication in both studios | The sentence the product exists to be able to say |
+| 2029 | Every authorised skill's `clinical_risk` confirmed by a named clinician, and every enforceable never-row enforced in code | Stage 3 multiplies the number of places an engineer's reasonable guess becomes hospital policy. The guesses are good tonight; they are not authorised (`CLINICAL_SAFETY.md` §2, `GOVERNANCE.md` G1) |
 | 2030 | A second hospital that installed it from the documents, without a vendor in the room | `README.md:180` already names this as the definition of v1 |
+| 2032 | A deployment can answer the seven conformance questions from stored evidence inside a day | This is the year the platform is either an institution with an audit trail or a drafting tool with a philosophy — the two branches are described in `BLUEPRINT.md` §1 |
 | 2035 | The profiles and prompts of four departments, reviewed annually by clinicians | This is the actual accumulated asset — not code, and not a model |
 
 **And the failure mode worth naming.** The likeliest 2035 is not a dystopia; it is a radiology

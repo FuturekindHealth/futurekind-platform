@@ -285,5 +285,31 @@ about any unbuilt application, and it deliberately owns no skill, no screen and 
 so that when an application is built, the argument about what it *means* has already been
 settled once, in this file and its three owners.
 
+## 9. What is shared, and what is not (Genesis Night 4)
+
+This file owns the family; the argument for the split below is in
+[`../BLUEPRINT.md`](../BLUEPRINT.md) §4. What belongs here is the rule an application author
+can apply without re-reading it.
+
+> **The two-user rule.** A shared thing is built when its second user exists — except for
+> vocabulary, policy, the review pattern and the evidence format, which are shared by
+> definition because none of them is a service.
+
+| Layer | Status for a fourteenth application |
+| --- | --- |
+| Terminology (`../DOMAIN_MODEL.md`) | **Shared now.** One word per thing is the only asset that appreciates. |
+| Policy (`core/gateway/models.yaml`) | **Shared now.** Risk, approval, audit and downgrade as data a clinician can read. |
+| Review and sign-off pattern (`../design/DESIGN_SYSTEM.md` §7) | **Shared now.** A second approval UI is a second clinical risk model. |
+| Evidence format (golden case shape, audit line shape, provenance fields) | **Shared now.** The format is common; the content belongs to each department. |
+| Identity, retention, analytics | **Not yet.** Each is gated behind an unwritten ADR, and building one early invents its shape for everyone. Retention is the exception: it is not premature, it is owed. |
+| A shared UI framework, a model catalogue beyond aliases, hospital-wide search, a notification bus, a document store | **Refused.** Not deferred — refused, with the reason in `../INVARIANTS.md` §1. |
+
+The failure this rule prevents is the pleasant one: a team builds a platform layer because
+two documents describe similar screens, and the layer has one user, no evidence, and a
+dependency graph that now needs the second application to arrive *correctly*. Fourteen
+applications were designed in one night; one exists. Until a second is real, the shared
+things are the four above, and every other "common service" is a private thing with extra
+ceremony.
+
 *FutureKind · Genesis Night 3 · 2026-10-09. Nothing here has been reviewed by a clinician other
-than the platform owner.*
+than the platform owner. §9 added Genesis Night 4 · 2026-10-09.*

@@ -8,6 +8,7 @@
 | **This file does not own** | The rules. [`CONSTITUTION.md`](CONSTITUTION.md) owns those, and binds this document. |
 | **Precedence** | Where this file and the constitution disagree, **the constitution is right and this file is the defect.** An explanation may not soften a rule it is explaining. |
 | **Read next** | [`BLUEPRINT.md`](BLUEPRINT.md) for the synthesis, [`FIRST-WEEK.md`](FIRST-WEEK.md) for the onboarding path. |
+| **Drift check** | Partial, and stated as such because rule 4 of `README.md` §10 asks. Every citation in the tables is gate-checked; §2's three "already present" examples are each reproducible with the named command. **What no check covers: the argument itself.** A reason can go stale without any file changing, which is why the amendment rule lives in the constitution and not here. |
 
 The constitution states nineteen principles. A principle with no stated reason survives
 one inconvenient quarter. This file supplies the reasons so the principles survive ten

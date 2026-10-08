@@ -9,6 +9,7 @@ Genesis Night 4, 2026-10-09.
 | **Does not own** | Threats from a malicious actor ([`security/THREAT_MODEL.md`](security/THREAT_MODEL.md)), clinical gates ([`safety/CLINICAL_SAFETY.md`](safety/CLINICAL_SAFETY.md)), the never-list ([`INVARIANTS.md`](INVARIANTS.md)). |
 | **Numbering** | `FM1…` for failure modes. `F1…F30` already means "workflow break" in `clinical/HOSPITAL_WORKFLOW.md` §7, and one prefix for two things is the defect this file is meant to prevent, not propagate. |
 | **Method** | Ranked by (probability × irreversibility), not by how frightening each row reads. Every warning sign must be checkable by a person who is not the author. |
+| **Drift check** | Each `FM` row's "Already visible" line is dated and points at a measurement or a file, so the ranking can be re-tested rather than re-asserted; the kill criteria in §3 are the strongest form of the check, because each names the condition under which the file itself should be closed. What has no instrument: the rankings. They are judgement, labelled as judgement. |
 
 ---
 

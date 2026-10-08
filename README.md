@@ -235,3 +235,9 @@ Apache-2.0. See [LICENSE](LICENSE) and [docs/product/README.md](docs/product/REA
 
 FutureKind is clinical decision *support*. It does not diagnose, and no output from
 it is a clinical decision.
+
+---
+
+Start with [docs/README.md](docs/README.md), which says what each document owns and where it must stop.
+If you are joining the project, [docs/FIRST-WEEK.md](docs/FIRST-WEEK.md) is the seven-day path and
+[docs/BLUEPRINT.md](docs/BLUEPRINT.md) is the ten-year argument.

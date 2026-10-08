@@ -76,7 +76,24 @@ somewhere else.**
 
 ---
 
-## 8. Reading order, by who you are
+## 8. The synthesis and governance layer
+
+Genesis Night 4 was a thinking sprint: no code, and no new authority except where none
+existed. Each row below owns something no earlier document did — and the mapping of the
+sprint's eighteen named outputs onto these files is stated once, in
+[`BLUEPRINT.md`](BLUEPRINT.md) §0, so no second copy exists to disagree with.
+
+| Document | Owns | Stops at |
+| --- | --- | --- |
+| [`BLUEPRINT.md`](BLUEPRINT.md) | The ten-year answer, every boundary judged, the ecosystem verdict, the competitive position, the output mapping, founder notes and lessons | Rules, names, arrangement, sequence — all of which already have owners above |
+| [`PHILOSOPHY.md`](PHILOSOPHY.md) | The *reasons* for the principles, the fundamental-versus-accidental test, the five philosophies, and the assumptions that could falsify them | The principles themselves. Where the two disagree, the constitution is right and this file is the defect |
+| [`CONCEPTUAL_DEBT.md`](CONCEPTUAL_DEBT.md) | Debt of ideas: duplicated concepts, vocabulary, authorities and hidden coupling, ranked with the command that measured each, and the deletion list | Principle violations (`CONSTITUTION.md` §7), implementation sequence (`product/ROADMAP.md`) |
+| [`FAILURE-MODES.md`](FAILURE-MODES.md) | Ranked ways this project fails, each with an earliest checkable warning sign; the success signals; the kill criteria | Threats from an attacker (`security/THREAT_MODEL.md`), clinical gates (`safety/CLINICAL_SAFETY.md`) |
+| [`INVARIANTS.md`](INVARIANTS.md) | The refusal register (`N`) with the pressure behind each refusal, and the protection register (`M`) with the first sign of loss | The clinical never-rows (`clinical/HOSPITAL_WORKFLOW.md` §5) and the principles underneath both |
+| [`GOVERNANCE.md`](GOVERNANCE.md) | Decision rights, the four seats, the clinical veto, the amendment queue, the open-source strategy and the foundation triggers | The principles being governed, and the pricing arithmetic |
+| [`FIRST-WEEK.md`](FIRST-WEEK.md) | The onboarding path, the seven things that must survive any rewrite, the traps, and the first pull request | Anything that is a rule, a name or a specification |
+
+## 9. Reading order, by who you are
 
 | You are | Read, in this order |
 | --- | --- |
@@ -84,16 +101,24 @@ somewhere else.**
 | Building the next application | `architecture/APPLICATION_MAP.md` §2 and §6 → `product/CLINICAL_SUITE.md` §1 → `design/DESIGN_SYSTEM.md` → `design/UX_GUIDE.md` §8 → `safety/CLINICAL_SAFETY.md` §6 |
 | A clinician deciding whether to trust it | `README.md`'s intended-use sentence → `safety/CLINICAL_SAFETY.md` §3, §5 and §9 → `product/RADIOLOGY_WORKFLOW.md` §4 → `product/GOLDEN_DATASET.yaml` header |
 | Running the hospital's side of it | `clinical/HOSPITAL_WORKFLOW.md` → `business/COMMERCIAL_ROADMAP.md` §5 and §7 → `product/ROADMAP.md` §12 |
+| Joining the project, with a week | [`FIRST-WEEK.md`](FIRST-WEEK.md) — five days, one written answer each, then the seven things that must survive any rewrite |
+| Deciding whether to trust it with a patient | [`CONSTITUTION.md`](CONSTITUTION.md) §7, then [`FAILURE-MODES.md`](FAILURE-MODES.md) §1, then [`INVARIANTS.md`](INVARIANTS.md) §1 |
 | Reviewing a pull request | `DOMAIN_MODEL.md` (does this introduce a word?) → the document that owns the area → `scripts/doctor/check-citations.py` |
 
-## 9. Three rules that keep this set honest
+## 10. Four rules that keep this set honest
 
 1. **A citation that has drifted is a defect in the citing document.** `path:line` pairs are checked
    by `scripts/doctor/check-citations.py` on every push; section-number pointers are not, so a
-   numbered claim must carry a line.
-2. **A count in a document is a promise.** Test totals, skill counts and version numbers are the
-   first things a release pass invalidates; prefer the rule to the number, as
-   `DOMAIN_MODEL.md` §1 now does.
+   numbered claim must carry a line. The checker verifies that a cited line *exists and is
+   non-blank* — it cannot verify agreement, which is why a drifted-but-non-blank line has passed
+   before (`CONCEPTUAL_DEBT.md` D13).
+2. **A fact that moves has one home; documents point, they do not copy.** Test totals, skill
+   counts, citation counts and version numbers are the first things a release pass invalidates.
+   A number in prose is allowed only if it is dated or produced by a command — otherwise it is
+   deleted, not corrected.
 3. **A second document for one thing is a defect.** Extend the artefact that owns the subject. This
    index is the record of who owns what, and a new document needs a row here on the day it is
    added.
+4. **A new document names the check that fails when it drifts.** A guard test, a validator, a
+   conformance question, or an explicit "nothing — this is prose". A document that cannot answer
+   is a restatement, and restatements rot quietly while looking like progress.

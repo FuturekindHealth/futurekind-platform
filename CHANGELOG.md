@@ -10,7 +10,88 @@ The format is based on Keep a Changelog.
 
 Nothing below is tagged; the feature branch carries all of it.
 
-### Genesis Night 3 — the clinical operating system, designed (2026-10-09)
+### Genesis Night 4 — the synthesis (2026-10-09)
+
+A thinking sprint on purpose: no code, no configuration, no test and no compose file
+changed. Seven new documents, six extended, and one commit that corrected five statements
+in the existing set which had measured the repository once and were still written in the
+present tense. **No measurement was taken tonight against a model, a patient or a
+clinician** — the verification here is that every claim was re-run against the tree.
+
+#### Added
+
+- **[`docs/PHILOSOPHY.md`](docs/PHILOSOPHY.md)** — the reasons the constitution deliberately
+  withholds, and a test for telling a fundamental assumption from an accident of 2026:
+  *does removing this change who is responsible, or only how it is done?* Nine assumptions
+  pass; the entire technology stack fails it. The disappearance test is the sharper half —
+  of the five assets that survive the code (vocabulary, refusal list, evaluation format, the
+  accountability argument, the record of rejections) not one is a Python file.
+- **[`docs/BLUEPRINT.md`](docs/BLUEPRINT.md)** — Gate, Instrument, Suite, Evidence: the four
+  stages, with the test that says each happened. The organising finding is that the
+  platform's **southern border (toward the model) is drawn in code and fails loudly, while
+  its northern border (retention, identity, the never-list, ratification) is drawn in prose
+  and cannot fail at all.** Also: every boundary judged, the two-user ecosystem rule, the
+  competitive verdict (the moat is the buyer's ability to check — and the honest weakness,
+  that FutureKind cannot sell liability transfer), founder notes and eight lessons.
+- **[`docs/CONCEPTUAL_DEBT.md`](docs/CONCEPTUAL_DEBT.md)** — sixteen debt-of-ideas rows, each
+  with the command that measured it; three mechanisms that explain most of them (restatement
+  without generation, a claim with no instrument, a placeholder as authority); four things
+  that look like debt and must be defended; ten ranked deletions. The register's heaviest row
+  is 131 references to five ADRs that do not exist.
+- **[`docs/FAILURE-MODES.md`](docs/FAILURE-MODES.md)** — twelve ways this dies, ranked by
+  probability times irreversibility, each with an earliest warning sign a person who is not
+  the author can check; seven success signals in the order they would appear; five kill
+  criteria, written now while they cost nothing.
+- **[`docs/INVARIANTS.md`](docs/INVARIANTS.md)** — sixteen things that will never be built,
+  each paired with the *reasonable* pressure that will ask for it, and thirteen things that
+  must not be lost, each with the first sign of its own disappearance.
+- **[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)** — starts from a measured absence: no code of
+  conduct, no CLA, no trademark policy, and no file in the repository contains the word
+  "foundation". Four seats, the clinical veto (G1), segregation of duties between authoring
+  and ratifying an evaluation case (G2), the free/paid line, a conformance checklist that
+  turns a licence argument into an evaluation, and the triggers at which a foundation stops
+  being paperwork.
+- **[`docs/FIRST-WEEK.md`](docs/FIRST-WEEK.md)** — the sprint's real question: an engineer
+  arrives in 2032 and has a week. Five days with one written answer each, the seven things
+  that must survive any rewrite, eleven files in reading order, four traps that have each
+  already caught someone here, and the first pull request.
+
+#### Extended, in the document that already owned the subject
+
+- `DOMAIN_MODEL.md` §11 — **ownership of truth**: for each class of fact, which file defines
+  it, which may restate it, and what fails when they disagree. Tonight exactly one class has
+  a failing mechanism (the alias check at boot); the other nine have none. §12 names the
+  three objects stage 4 needs — **Hospital, Actor, Record** — with their banned synonyms fixed
+  before they can proliferate.
+- `safety/CLINICAL_SAFETY.md` §11 — the gradient as one law (*act early on drafts, at the last
+  moment on decisions, never on consequences*) and the table of intentional silences, each
+  with what it costs the clinician.
+- `product/PRODUCT_BIBLE.md` §9 — the two-user rule: share vocabulary, policy, the review
+  pattern and the evidence format; refuse the rest until a second application is real.
+- `business/COMMERCIAL_ROADMAP.md` §10 — assurance is what is actually for sale, and the two
+  motions that follow from it.
+- `VISION-2035.md` — the 2029 and 2032 rows its own dependency table was missing.
+- `docs/README.md` — the synthesis and governance layer (§8), three honesty rules became four,
+  and the "no second document" rule applied to this sprint's own eighteen named outputs.
+
+#### Fixed
+
+- **Five statements that were true once** (`52bf45f`): the naming authority's "zero
+  occurrences" proof, `services/ai/litellm` "exists as an empty directory", grounding "has no
+  occurrence at all", a synonym sweep reported as applied while `ARCHITECTURE.md:150` still
+  reads *Model Router*, and two stale test counts. Every edit line-neutral, because these two
+  files are cited by line number from elsewhere in the set.
+
+#### What this sprint made worse, stated plainly
+
+Seven more documents entered a repository whose central registered defect is that it has more
+claims than instruments. `CONCEPTUAL_DEBT.md` §5 says so, `docs/README.md` rule 4 now requires
+every future document to name the check that fails when it drifts, and the honest defence is
+that six of the seven files exist to make the other thirty checkable — but that defence is
+exactly the one a documentation surplus always makes. The next sprint should add an
+instrument, not an argument.
+
+#### Genesis Night 3 — the clinical operating system, designed (2026-10-09)
 
 Design work, deliberately: the brief was everything **above** the platform, and the platform was
 left alone. **No code, configuration, test or compose file changed.** Nine new documents, three

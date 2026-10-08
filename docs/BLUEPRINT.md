@@ -8,6 +8,7 @@ Genesis Night 4, 2026-10-09. A synthesis, not a specification.
 | **Owns** | The whole picture: the ten-year answer, every boundary judged, the ecosystem verdict, the competitive position, the reading order of the document set. |
 | **Does not own** | Rules ([`CONSTITUTION.md`](CONSTITUTION.md)), names ([`DOMAIN_MODEL.md`](DOMAIN_MODEL.md)), arrangement ([`ARCHITECTURE.md`](ARCHITECTURE.md)), sequence ([`product/ROADMAP.md`](product/ROADMAP.md)), reasons ([`PHILOSOPHY.md`](PHILOSOPHY.md)). |
 | **Status** | Derivative and subordinate. Every claim here cites the file that owns it. Where this document adds a claim, it is labelled a *verdict* — the owner's to refuse. |
+| **Drift check** | Indirect and real: §2's verdicts each name a row in `CONCEPTUAL_DEBT.md`, and every D-row carries the command that measured it. Close a row without moving the verdict, or move a verdict the commands contradict, and one of the two is now stale. The stage table in §1 checks itself a second way — stage tests 1 and 2 are executable today. |
 
 ---
 
@@ -23,17 +24,17 @@ owner's call, not a discovery.
 | --- | --- | --- |
 | Blueprint | this file | **New** |
 | Philosophy | [`PHILOSOPHY.md`](PHILOSOPHY.md) | **New** |
-| Canonical Model | [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) + §3 of this file | Extended |
+| Canonical Model | [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) §11–§12 (ownership of truth; Hospital, Actor, Record) | Extended here |
 | Design Language | [`design/DESIGN_SYSTEM.md`](design/DESIGN_SYSTEM.md) | Extended Night 3 |
 | System Map | [`ARCHITECTURE.md`](ARCHITECTURE.md), [`architecture/APPLICATION_MAP.md`](architecture/APPLICATION_MAP.md) | Exists |
 | Clinical Model | [`clinical/HOSPITAL_WORKFLOW.md`](clinical/HOSPITAL_WORKFLOW.md), [`DOMAIN_MODEL.md`](DOMAIN_MODEL.md) | Exists |
 | Product Ecosystem | §4 below, [`product/PRODUCT_BIBLE.md`](product/PRODUCT_BIBLE.md) | This file + Bible |
 | Technical Debt Review | [`CONCEPTUAL_DEBT.md`](CONCEPTUAL_DEBT.md) | **New** |
-| Commercial Strategy | [`business/COMMERCIAL_ROADMAP.md`](business/COMMERCIAL_ROADMAP.md) | Extended Night 3 |
+| Commercial Strategy | [`business/COMMERCIAL_ROADMAP.md`](business/COMMERCIAL_ROADMAP.md) §10 (assurance is what is for sale) | Extended |
 | Governance Model | [`GOVERNANCE.md`](GOVERNANCE.md) | **New** |
-| Clinical Safety Principles | [`safety/CLINICAL_SAFETY.md`](safety/CLINICAL_SAFETY.md) + §5 | Extended Night 3 |
+| Clinical Safety Principles | [`safety/CLINICAL_SAFETY.md`](safety/CLINICAL_SAFETY.md) §11 (the gradient as one law, and the costed silences) + §5 of this file | Extended |
 | Open-Source Strategy | [`GOVERNANCE.md`](GOVERNANCE.md) §4 | **New** |
-| 2035 Vision | [`VISION-2035.md`](VISION-2035.md) | Extended Night 3 |
+| 2035 Vision | [`VISION-2035.md`](VISION-2035.md) — its year table gained 2029 and 2032 | Extended |
 | Founder Notes | §7 below | This file |
 | Lessons Learned | §8 below | This file |
 | Things We Will Never Build | [`INVARIANTS.md`](INVARIANTS.md) register N | **New** |
@@ -56,7 +57,7 @@ Read that as an evolution in four stages, each with the test that says it happen
 | Stage | What FutureKind is | The test it is real | State |
 | --- | --- | --- | --- |
 | 1 — **Gate** | One boundary a model request cannot avoid: permission, policy, provenance, privacy. | A caller cannot name a model, and the Gateway refuses to boot on an unknown alias. | **Done.** Guarded by tests. |
-| 2 — **Instrument** | A product a clinician uses, whose every safety claim carries a measurement. | A radiologist's time-to-sign and edit rate are measured by *her*, not inferred by the tool. | **Built, unmeasured.** No model has run here; no clinician has been timed. |
+| 2 — **Instrument** | A product a clinician uses, whose every safety claim carries a measurement. | A radiologist's time-to-sign and edit rate are measured by *them*, not inferred by the tool. | **Built, unmeasured.** No model has run here; no clinician has been timed. |
 | 3 — **Suite** | Many small applications on one language and one policy file. | A second specialty ships without touching the platform (SPEC-12-04). | **Designed.** Fourteen applications, one implementation. |
 | 4 — **Evidence** | The artefact a hospital produces for a regulator, a coroner and a patient: what was asked, what answered, what was drafted, who changed it, who signed. | Any of the six medicolegal questions in `CLINICAL_SAFETY.md` §8 answered from stored data in under a minute. | **Not started, and this is the whole game.** Audit is emitted, not retained; there is no Hospital object; identity is one shared key. |
 

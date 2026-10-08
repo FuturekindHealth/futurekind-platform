@@ -188,5 +188,32 @@ count.
 | 5 | Whether Enterprise means "we support N installations" or "one hospital with a group contract" | It decides whether ADR-0007 is urgent or next-year |
 | 6 | Price and licence posture for a public repository: what is free, what is paid, what is a service | Apache-2.0 has already answered part of it |
 
+## 10. What is actually for sale (Genesis Night 4)
+
+One sentence changes the emphasis of everything above, and it is a *verdict* rather than a
+finding: **FutureKind sells assurance, not intelligence.** Drafting is arriving everywhere,
+on every EHR, in every vendor's next release, and it is becoming free. What no competitor
+can offer without changing how it is organised is a hospital that can *check* the claim —
+which alias answered, which check ran at what cost, who edited what, who signed, and can all
+of that be produced two years later.
+
+Three consequences, each with the motion it reorders:
+
+| Consequence | What it means for sequencing |
+| --- | --- |
+| **Assurance is bought after an incident, not before one.** | The evidence layer (ADR-0003, ADR-0004) is not a feature to ship when convenient; it is the product. Every motion in §3 that does not produce evidence is support work, and support work is a cost line, not a moat. |
+| **The buyer must be able to run the check themselves.** | Evaluation-as-a-service and deployment certification are the only paid layers that extend the differentiator instead of contradicting it. A hosted "we grade our own model" offering is the version of this platform that loses to a bigger vendor. |
+| **We will not carry clinical liability.** | Stated in §7's refusals and repeated here because it is the commercial weakness, not a footnote: a large part of this market buys responsibility transfer, and an open, auditable, hospital-run system explicitly refuses to take it. Any pitch that hides that sentence will be discovered in the first procurement round. |
+
+The free/paid boundary is owned by [`../GOVERNANCE.md`](../GOVERNANCE.md) §4.2 and is not
+restated here, because two documents drawing the same line is the failure mode both files
+exist to prevent. Its one-sentence test, reproduced once because it is a *pricing* rule as
+much as a governance one: **a paid tier may add a service; it may never move a threshold,
+soften a refusal, or hide a check.**
+
+Owner decision 6 in §9 — the price and licence posture — now has a rule to price against and
+still needs the owner's number.
+
 *FutureKind · Genesis Night 3 · 2026-10-09. Every score in §4 is an estimate with its swing factor
-named, and no number in this document is a measurement of anything.*
+named, and no number in this document is a measurement of anything. §10 added Genesis Night 4 ·
+2026-10-09.*

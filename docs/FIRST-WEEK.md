@@ -8,6 +8,7 @@ Genesis Night 4, 2026-10-09. Written for a stranger arriving in 2032.
 | **Owns** | The onboarding path, the invariant understandings, the traps, the first pull request. |
 | **Does not own** | Rules, names, architecture, sequence — each has exactly one owner, listed in [`README.md`](README.md). |
 | **Premise** | In 2032 the code will be different. The models will be unrecognisable, half the files below will have been rewritten, and the radiology prompt may be a memory. What must not have changed is in §2. |
+| **Drift check** | §1 Day 5 — the four deliberate attacks. Run them and compare against what the gates catch: if the set of failures changes, this file is stale. §3's reading path is the second instrument, because every row names a document that must exist to be read, and `docs/README.md` is the index that says whether it still does. |
 
 ---
 
@@ -71,9 +72,10 @@ cannot find one, look in the documents you were not sent.
 
 ### Day 5 — Try to break it, and read what refuses you
 
-In a branch: add a `model` field to the request schema. Then add the word `TODO` to a
-document. Then change a prompt's version in code without changing it in
-`PROMPT_LIBRARY.md`. Then cite `somefile.py:99999`. Run the gates
+In a branch: add a `model` field to the request schema. Then plant the three-letter
+placeholder that the hygiene job in `.github/workflows/ci.yml` searches every tracked file
+for. Then change a prompt's version in code without changing it in
+`PROMPT_LIBRARY.md`. Then cite a line number past the end of a file that exists. Run the gates
 ([`../.github/workflows/ci.yml`](../.github/workflows/ci.yml)) and read every failure.
 
 **Write down:** which of the four attacks the gates caught, and which they did not. The ones

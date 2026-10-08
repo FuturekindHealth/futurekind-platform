@@ -1316,6 +1316,63 @@ Decisions I could not make as an engineer, each blocking a stage above.
    assigned them. They should be confirmed or corrected by the clinical owner
    before the Gateway is used for real work.
 
+## 11. Ownership of truth (Genesis Night 4)
+
+This document has always said what a word *means*. It has never said, for each class of
+fact, three things at once: which file defines it, which files may restate it, and **what
+fails when they disagree.** The third column is the one the platform is short of, and it is
+the reason [`CONCEPTUAL_DEBT.md`](CONCEPTUAL_DEBT.md) exists at all.
+
+| Class of fact | Defined in | May restate it | What fails when they disagree |
+| --- | --- | --- | --- |
+| Routing reality: skill → capability → alias → model | `core/gateway/models.yaml` + `configs/litellm/config.yaml` | Any document may *point* | **The boot fails loudly.** `litellm_config.py` compares the two and refuses to start. This is the template every row below should reach. |
+| Policy per skill (`clinical_risk`, approval, audit, downgrade) | `models.yaml` | `architecture/gateway-policy.md` | The catalogue loader refuses the illegal combinations. Real. |
+| The meaning of a clinical noun | this file | everything | **Nothing.** A banned synonym in shipped code (D10) is found by reading, not by a gate. |
+| A document's section shape | `report.py` `SECTION_KEYS` | the screen; the validation tools *copy* it | Nothing. Five lists, no comparison (D6). |
+| The prompt text | `prompt.py` | `product/PROMPT_LIBRARY.md` §1 holds a copy | A pinned version string — which is a copy of a copy (D7). |
+| Test and citation counts | `CHANGELOG.md`, dated | nothing should | Nothing, and six documents were wrong or about to be (D2). |
+| Version numbers | each package's `__init__.py` | `ARCHITECTURE.md:313`, `configs/futurekind.yaml` | A mismatch nobody checks (D11). |
+| The clinical never-list | `clinical/HOSPITAL_WORKFLOW.md` §5 | `safety/CLINICAL_SAFETY.md` | Nothing yet: G3 requires a refusal path plus a test, and only radiology has one. |
+| What a correct report looks like | `product/GOLDEN_DATASET.yaml` | prose counts its cases | Nothing; prose counts drift (D2 again). |
+| What a deployment runs | `compose.yaml` | `configs/futurekind.yaml` advertises six components no process reads | Nothing, because that file has no reader (D3). |
+
+Two rules follow, and they belong to the naming authority because both are statements
+about which artefact is the referent of a word:
+
+> **A fact that moves has one home. Documents point; they do not copy.**
+> **A class of fact with no mechanism in the third column is either given one or deleted —
+> not maintained.** Maintained prose is the most expensive kind of duplicate, because it
+> looks like documentation and behaves like an interface nobody can compile.
+
+### Verification of the first rule, as it stands tonight
+
+`DOMAIN_MODEL.md` proved its own founding claim by counting words in another document, and
+those counts went stale while the argument stayed correct. Corrected 2026-10-09 in
+`52bf45f`, and the class of error is now named rather than patched instance by instance: a
+proof that is a measurement must be re-run by a command or removed.
+
+---
+
+## 12. Three objects stage 4 needs, and none of them is a schema
+
+The platform works today as one application behind one gate. It cannot become what
+[`BLUEPRINT.md`](BLUEPRINT.md) §1 calls stage 4 — a hospital's AI evidence layer — without
+three nouns that do not exist anywhere, in code or in this model. They were not forgotten.
+Each was *refused* by a deliberate design choice, and the refusal is right until the second
+site arrives.
+
+| Object | Status | Definition | Why nothing already in the model covers it | Blocked by |
+| --- | --- | --- | --- | --- |
+| **Hospital** | [ABSENT] | The unit of sovereignty: the legal entity that owns a deployment, its data, its retention period and its clinical authority. | `Skill` is a capability with policy, not a tenant. A `Study` belongs to a department, not to an institution. P14 forbids a cross-hospital data path with no subject to scope it to, so the prohibition is currently unenforceable rather than satisfied. | ADR-0007 (named, unwritten) |
+| **Actor** | [ABSENT] | A named human with a role, a session and the capacity to sign. Distinct from a credential. | `AuthenticatedCaller` authenticates a *deployment*. Provenance records which skill, alias and model answered — and cannot record who asked, which is the one field a medicolegal question needs first. The whole `approval_required` path is unreachable for the same reason. | ADR-0004, ADR-0005 |
+| **Record** | [ABSENT] | What survives a request, for how long, in whose custody, and who may destroy it. | `Report` is a document shape owned by the EHR. `skill_audit` is a log line owned by the Gateway. Neither is a retention promise, and the gap between "emitted" and "retained" is §7 row 4 of the constitution. | ADR-0003 |
+
+**Naming ruling, applied prospectively.** When these arrive they take the names above:
+*Hospital*, *Actor*, *Record*. The banned synonyms are the ones already circulating in
+prose — *tenant*, *org*, *site* for Hospital; *user*, *clinician*, *principal* for Actor;
+*log*, *audit*, *history* for Record. A class with five names in the documents will acquire
+five implementations in the code, which is the exact failure this file exists to prevent.
+
 ---
 
 **FutureKind Principle**

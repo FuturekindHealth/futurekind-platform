@@ -216,4 +216,47 @@ stub. None of it is traceable to a patient. A framework this cautious is worth a
 afternoon of a radiologist using it, and that afternoon is the difference between a safety case and
 a safety document.
 
-*FutureKind · Genesis Night 3 · 2026-10-09.*
+## 11. The gradient, stated as one law (Genesis Night 4)
+
+§2 is a ladder of *risk*. This is a ladder of *acts*, and it is the part a reviewer can
+apply to a new application without asking permission:
+
+> **FutureKind may act as early as it likes on anything that produces a draft, only at the
+> last possible moment on anything that produces a decision, and never on anything that
+> produces a consequence.**
+
+A **draft** is text inside a field a human owns. A **decision** is a state change in care. A
+**consequence** reaches a patient, a schedule, a bill or a legal record.
+
+| Run | The act | Where the platform sits | Evidence in this repository |
+| --- | --- | --- | --- |
+| 1 | Suggest, never block | The lowest rung, and the only one allowed to run unasked | The USG advisory chips: suggestions a radiologist accepts or rejects, with the ERP's sex-disclosure funnel upstream of display (`core/gateway/models.yaml:104-140`) |
+| 2 | Order a queue | Allowed, and only as a re-ordering that hides nothing | Triage in `product/RADIOLOGY_WORKFLOW.md` S3: reorder-only |
+| 3 | Draft into a field | The product's centre of mass | Four operations; `design/DESIGN_SYSTEM.md` — draft into a field, never over it |
+| 4 | Answer a question asked | On-request elaboration only | S5: comparison and explanation appear *on explicit request* |
+| 5 | Refuse arithmetic | A deliberate silence with a cost (§11.1) | Measurements are transcribed by the human; `quality.py` blocks an invented number instead of computing one |
+| — | **Complete** a clinical act | **Forbidden** | No code path signs. `copilot.py` has no sign operation that a model can reach; S6 is "none, by construction" |
+| — | **Notify** anyone | **Forbidden** | S10: flags never raise the notification |
+| — | **Judge** another AI's output | **Forbidden** | S11: peer review of AI-assisted work by another AI is not peer review |
+
+The three forbidden rungs are not missing features. They are the difference between this
+platform and an automation with a review screen attached, and each is registered with the
+pressure that will ask for it in [`INVARIANTS.md`](../INVARIANTS.md) §1.
+
+### 11.1 Where FutureKind intentionally does nothing, and what that costs
+
+An uncosted silence reads as an oversight and gets "fixed" by the next helpful engineer.
+So every intentional inaction carries its price, stated as the thing the clinician must do
+by hand.
+
+| The silence | Why | What it costs the clinician |
+| --- | --- | --- |
+| No AI during acquisition | A protocol change is a human decision at the scanner, and an overlay there trains people to accept machine advice under time pressure | They select the protocol, as they do today |
+| No measurement computed or corrected by the model | A number the machine derived is a number nobody checked; the one place the product does less work than it could | They read the calipers and type the value |
+| No self-reported confidence | A model's certainty is a stylistic claim by the thing being graded | They see flags and evidence, not a score, and decide |
+| No notification raised | An alert is a clinical act with an owner and a time | They confirm the flag before anyone is paged |
+| No checklist pre-ticking | The four taps are the checklist's entire evidentiary value | They tick, every time, on purpose |
+| No unprompted patient-facing explanation | Explaining a diagnosis to a patient is a consultation, not a render | They choose when a plain-language version exists, and they write the indication |
+| No AI review of AI output | Two machines agreeing is not two machines reviewing | A second human reads the difficult cases |
+
+*FutureKind · Genesis Night 3 · 2026-10-09. §11 added Genesis Night 4 · 2026-10-09.*
