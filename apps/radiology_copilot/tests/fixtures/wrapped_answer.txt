@@ -1,0 +1,13 @@
+Here is the structured report for this study:
+
+```json
+{
+  "clinical_indication": "33-year-old after a fall from height. Exclude fracture.",
+  "technique": "Technique not provided.",
+  "findings": "No acute haemorrhage, mass effect or midline shift. A non-displaced fracture is seen through the right temporal bone extending to the sphenoid wing. No depressed fragment. The ventricles are normal in size.",
+  "impression": "Non-displaced right temporal bone fracture extending to the sphenoid wing. No acute intracranial haemorrhage.",
+  "recommendations": "Clinical correlation for a basal skull fracture. Consider CT of the facial bones and review of the mastoid air cells."
+}
+```
+
+Let me know if you would like this reworded.
