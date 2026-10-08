@@ -153,7 +153,7 @@ The ERP already has the better shape (integration I1/I2). Adopt it; do not inven
 | 9.2 Write the report into the ERP's `radiology_report_drafts.structured_json` as a **patch under the existing row lock** | 2 d | `persistCareStructuredFormatState.ts` — the lost-update bug is already documented there; do not build a second draft store |
 | 9.3 Draft-pane UI: chips bound to observations, per-item accept, diff preserved | 3–5 d | Extends what `UsgAiDraftPanel.tsx` already does |
 | 9.4 `GET /reports/{report_id}` and list/search | 2–3 d | Needed by the Audit Timeline and the metrics view |
-| 9.5 Substantive-vs-cosmetic amendment classification | 1–2 d | The metric the product must earn (§5 of the workflow) |
+| 9.5 Substantive-vs-cosmetic amendment classification | 1–2 d | The metric the product must earn (`RADIOLOGY_WORKFLOW.md:381`) |
 
 **Total: 11–16 d estimate.** Value: laterality and negation become checkable fields, which
 closes the threat model's only "not detectable" row, and one fewer place a report exists.
