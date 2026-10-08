@@ -8,9 +8,14 @@ a section, one study abandoned, one blocking finding judged wrong. Where two too
 disagree, the disagreement is the test: `words_added` counts spans through the instrument's
 tokeniser and the expectation counts them through a plain `split`.
 
-Run it with the rest of the repository's Python checks:
+Run it with the rest of the repository's Python checks — by file, never by directory, because
+pytest's default pattern is `test_*.py` and a hyphen does not match it:
 
     /home/abinash/fkvenv/bin/python -m pytest scripts/validation/test-dashboard.py
+
+or by running the file itself, which reports how many tests it actually ran:
+
+    /home/abinash/fkvenv/bin/python scripts/validation/test-dashboard.py
 """
 
 from __future__ import annotations
@@ -457,3 +462,43 @@ def test_review_time_that_exceeds_the_wall_clock_says_so_out_loud() -> None:
     assert "exceeds the wall clock" in reading["session_summary"]["consistency_warning"]
     honest = dashboard.analysis(instance.rows, elapsed_seconds=3600.0, clinician="Dr A. Nair")
     assert honest["session_summary"]["consistency_warning"] == ""
+
+
+def _run() -> int:
+    """Run every test in this file, and refuse to report green for having run nothing.
+
+    Two ways this file fails silently: `python test-dashboard.py` only defines the functions
+    and exits 0, and `pytest scripts/validation/` collects no file whose name has a hyphen
+    (the default pattern is `test_*.py`) and also exits 0. Both read as a passing suite. So
+    the file runs itself when executed, names what it ran, and treats an empty collection as
+    a failure rather than a success."""
+    import inspect
+    import tempfile
+
+    tests = [
+        (name, fn)
+        for name, fn in sorted(globals().items())
+        if name.startswith("test_") and callable(fn)
+    ]
+    if not tests:
+        print("FAIL — not one test found in this file")
+        return 1
+
+    failed: list[tuple[str, Exception]] = []
+    for name, fn in tests:
+        try:
+            if inspect.signature(fn).parameters:
+                fn(Path(tempfile.mkdtemp(prefix="fk-dash-")))
+            else:
+                fn()
+        except Exception as exc:  # noqa: BLE001 — the runner reports failures, it does not judge them
+            failed.append((name, exc))
+
+    for name, exc in failed:
+        print(f"FAIL {name}: {type(exc).__name__}: {exc}")
+    print(f"{len(tests) - len(failed)} of {len(tests)} dashboard tests pass")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(_run())

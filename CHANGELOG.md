@@ -48,6 +48,10 @@ of each change whether it takes attention away from the person reading the image
   a traceback could carry submitted text.
 - **A 422 promised field names it never showed**, and the network message promised a Retry
   button that only appears at page load. Both now say what is actually on the screen.
+- **`test-dashboard.py` could report green while running nothing.** Executing it directly only
+  defined its functions and exited 0, and `pytest scripts/validation/` collects no file whose
+  name has a hyphen, so that also exits 0. It now runs itself, prints `28 of 28`, and treats an
+  empty collection as a failure — proven by breaking an assertion and by renaming every test.
 
 #### Changed
 
