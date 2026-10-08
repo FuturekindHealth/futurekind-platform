@@ -10,6 +10,56 @@ The format is based on Keep a Changelog.
 
 Nothing below is tagged; the feature branch carries all of it.
 
+### Sprint 11 — the radiologist in the loop (2026-10-08)
+
+Evidence, not features. The Gateway, LiteLLM, policy, routing, the architecture, compose and
+the rest of the documentation were left alone, and nothing in this sprint changes a draft, a
+prompt or a check. One screen was added so that twenty MRI brain studies can be run past one
+radiologist in one afternoon, and the instrument measures the radiologist rather than scoring
+the model.
+
+#### Added
+
+- **`scripts/validation/dashboard.py` and `dashboard.html`** — a local session the reviewer
+  works in: dictation on the left as the source of truth, the five draft sections editable on
+  the right, and every quality finding with **Real problem / Not a problem** buttons, because
+  a false-blocking rate this tool inferred from text would be the tool grading itself. It is a
+  client of the four endpoints over HTTP behind one origin, and it proxies them rather than
+  importing them. Each study records the brief's columns — skill, model alias, generation,
+  review and approval seconds, edits, words added and removed, sections edited, checks
+  triggered, blocking and advisory findings, final approval — plus redraft requests and
+  abandonments, and exports `rows.csv` / `rows.json` (numbers), `metrics.json`, `phrases.csv`
+  (report fragments, written outside the repository by the same guard as Sprint 10's export)
+  and the end-of-session report with four Top-20 tables: AI mistakes, human edits, prompt
+  opportunities, and deterministic checks worth building — the last one populated only where
+  the engine said nothing and the reviewer still acted.
+- **`scripts/validation/test-dashboard.py`** — 18 tests for the arithmetic, with no server and
+  no model: four words typed are four words added, an abandoned study contributes its time and
+  nothing else, a document-level advisory is never scored as ignored, and a re-signed study
+  counts once.
+
+#### Verified
+
+A scripted session over the live copilot and Gateway against a stand-in model held all 41 of
+its hand-computed expectations, and the rendered screen was driven in a browser: five
+textareas, the blocking status line, three findings with working verdict buttons, the live
+re-check clearing blocks as the text changed, sign-off advancing to the next study, and the
+routing line reporting `fk-reasoning · ollama/qwen3:14b`. The in-app browser on this machine
+exposes no visible surface, so the screen was verified through its accessibility snapshot and
+computed layout, not by eye.
+
+Seven defects the instrument found in itself, all fixed here: a session run twice
+double-counted every mean; a phrase filter ran before the word count, so a deleted sentence
+scored as zero words removed; an abandoned study was diffed as though it had been edited;
+`/report` handed the socket writer a string, truncating the page and hanging the browser; the
+alias lookup stopped at the first log line carrying the request id and reported nothing; a
+restart lost the phrase evidence the four rankings are built from; and a clicked verdict
+rebuilt the whole findings strip, throwing the reviewer's scroll position away twenty times an
+afternoon.
+
+**739 tests — 492 Gateway, 229 copilot (both in CI) and 18 on the dashboard
+(`scripts/validation/`, not wired into CI).**
+
 ### Sprint 10 — measured against reality, as far as this machine allows (2026-10-08)
 
 No architecture, no Gateway, no prompt redesign: the brief was to find out how the product

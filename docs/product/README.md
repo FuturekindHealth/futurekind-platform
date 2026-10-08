@@ -35,7 +35,7 @@ as built; everything here is above it.
 | …ratified by a clinician | **0** |
 | Prompts running in code | **1** — `radiology-report-draft/0.3.0` |
 | Deterministic safety checks on a draft | **9**, run three times (draft, every edit, before signature). Six of them can refuse the sign-off; none of them asks the model |
-| Tests in the repository | **721** — 492 Gateway, 229 copilot, all green, all in CI |
+| Tests in the repository | **739** — 492 Gateway and 229 copilot (both in CI), 18 on the validation dashboard (`scripts/validation/`, not in CI) |
 | Real-model latency measurements | **0.** The only timing taken is 27–30 ms against a stub |
 | Ungoverned direct-to-model paths at the customer | **at least 4**, of which one uses a vision model and one selects its model from an environment variable |
 
