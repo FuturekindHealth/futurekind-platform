@@ -273,7 +273,8 @@ at it.
 6. `dropped_observation`'s real false-positive rate on *model* output is still unknown; the
    0-of-100 above is against a faithful draft, which is the best case.
 7. The 28 dashboard tests are not in CI, so the instrument's arithmetic is guarded only if
-   somebody runs it.
+   somebody runs it. The file now runs itself and prints `28 of 28`, which closes the worse
+   version of this — a run that collected nothing and reported green — but not the gap itself.
 
 ## 5. Alpha → Beta gate
 
