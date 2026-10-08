@@ -1,9 +1,16 @@
-"""Golden cases: three studies, drafted deterministically, checked field by field.
+"""Golden cases: six studies, drafted deterministically, checked field by field.
 
-Each case feeds a stored model answer through the real workflow and asserts the
-whole document — the five sections, and the metadata, provenance, skill and policy
-that make the draft auditable. No model runs here; the answer is the fixture, so
-the only thing these tests can fail on is this application's own behaviour.
+Each case feeds a stored model answer through the real workflow, against the study
+that answer was written for, and asserts the whole document — the six sections, the
+quality pass and confidence computed over them, and the metadata, provenance, skill
+and policy that make the draft auditable. No model runs here; the answer is the
+fixture, so the only thing these tests can fail on is this application's own
+behaviour.
+
+Three of the six are MRI brain, the workflow Sprint 9 exists to run. Their dictated
+text comes from `docs/product/GOLDEN_DATASET.yaml` (N-04, E-17, C-16), so the golden
+fixtures and the golden dataset are the same clinical material rather than two
+versions of it.
 """
 
 from __future__ import annotations
@@ -15,27 +22,30 @@ import pytest
 from futurekind_radiology.errors import ModelOutputError, ReportTruncatedError
 from futurekind_radiology.prompt import PROMPT_VERSION
 from futurekind_radiology.report import MODEL_SECTION_KEYS
-from tests.conftest import FROZEN_STAMP, completion, fixture_text, golden, make_copilot, submission
+from tests.conftest import (
+    FROZEN_STAMP,
+    REQUIRED_OUTPUT,
+    completion,
+    fixture_text,
+    golden,
+    make_copilot,
+    submission,
+    submission_for,
+)
 
-GOLDEN_CASES = ("normal_ct_head.json", "hypertensive_bleed.json", "nph_hydrocephalus.json")
-
-#: The nine parts the brief requires, named once and asserted everywhere.
-REQUIRED_OUTPUT = (
-    "clinical_indication",
-    "technique",
-    "findings",
-    "impression",
-    "recommendations",
-    "metadata",
-    "model_provenance",
-    "skill",
-    "policy",
+GOLDEN_CASES = (
+    "normal_ct_head.json",
+    "hypertensive_bleed.json",
+    "nph_hydrocephalus.json",
+    "mri_brain_normal.json",
+    "mri_brain_abscess.json",
+    "mri_brain_epilepsy.json",
 )
 
 
 def draft(fixture: str, **completion_overrides: object):
     copilot, stub = make_copilot(completion(fixture_text(fixture), **completion_overrides))
-    return asyncio.run(copilot.draft(submission())), stub
+    return asyncio.run(copilot.draft(submission_for(fixture))), stub
 
 
 @pytest.mark.parametrize("fixture", GOLDEN_CASES)
@@ -47,8 +57,30 @@ def test_a_golden_study_drafts_the_whole_document(fixture: str) -> None:
     assert tuple(report.model_dump()) == REQUIRED_OUTPUT
     for key in MODEL_SECTION_KEYS:
         assert report.section(key) == expected[key]
-    assert report.clinical_indication == submission().clinical_indication
+    assert report.clinical_indication == submission_for(fixture).clinical_indication
     assert stub.last_request["skill"] == "radiology-report"
+
+
+@pytest.mark.parametrize("fixture", GOLDEN_CASES)
+def test_a_golden_draft_is_signed_without_the_checks_refusing_it(fixture: str) -> None:
+    """The clinical material the product is built on must pass its own gates.
+
+    A golden case that came back blocking would mean either the check is wrong or
+    the reference report is — and both of those are worth a failing test, not a
+    fixture nobody looks at again.
+    """
+    report, _ = draft(fixture)
+    study = submission_for(fixture)
+
+    assert report.quality.blocking == [], [finding.message for finding in report.quality.blocking]
+
+    copilot, _ = make_copilot(completion(fixture_text(fixture)))
+    signed = copilot.review(
+        report, decision="signed", clinician="Dr A. Nair", submission=study
+    )
+
+    assert signed.is_signed
+    assert signed.quality.checked_at == FROZEN_STAMP
 
 
 def test_the_indication_in_the_report_is_the_clinicians_own_words() -> None:
