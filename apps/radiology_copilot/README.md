@@ -171,7 +171,7 @@ Needs the Gateway from the same repository. On a machine with Python:
 
 ```bash
 cd apps/radiology_copilot
-python -m pytest   # 225 tests: 219 deterministic, 6 over real sockets
+python -m pytest   # 255 tests: 249 deterministic, 6 over real sockets
 ```
 
 Use the interpreter from a virtualenv with `fastapi`, `uvicorn`, `pydantic`,
