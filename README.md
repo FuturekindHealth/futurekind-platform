@@ -85,7 +85,7 @@ is SPEC-10-04, deliberately left for ADR-0004 rather than changed mid-release.
 | `core/gateway/models.yaml` | The live catalogue: 6 authorised skills, their policy, and the aliases that serve them | Config, reviewed one skill at a time |
 | `configs/` | Platform manifest and LiteLLM's alias list | Config |
 | `compose.yaml` | One installation: postgres, redis, qdrant, litellm, gateway, open webui, behind profiles | Written and parsed; **never booted here** |
-| `docs/` | Constitution, ADRs, domain model, specification, architecture, product design, threat model | The bulk of this repository, deliberately |
+| `docs/` | Constitution, ADRs, domain model, specification, architecture, product design, threat model — and the application layer above them: product family, clinical suite, design system, hospital workflow, safety, commercial roadmap, vision | The bulk of this repository, deliberately. Start at [`docs/README.md`](docs/README.md), which says what each document owns |
 | `scripts/doctor/check-ai.sh` | Verifies the AI path is the path the architecture claims, including that LiteLLM is *not* reachable from the host | Runs on a deployed host |
 
 Six skills are authorised. **121** are designed and reviewed on paper in

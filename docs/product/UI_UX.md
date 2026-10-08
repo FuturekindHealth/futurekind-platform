@@ -4,6 +4,14 @@
 places this will actually be used: a radiology reading room at Hope Neurotrauma, and an
 ultrasound room at CARE Diagnostics with a tablet on a cart and a corridor outside.
 
+**Ownership, since the document set grew around it.** This file owns **the radiology screens**.
+The shared language every department's screens must obey is
+[`../design/DESIGN_SYSTEM.md`](../design/DESIGN_SYSTEM.md) — tokens, the keyboard, the eleven
+patterns — and the cross-application screen inventory and state wording is
+[`../design/UX_GUIDE.md`](../design/UX_GUIDE.md). Where this file states a rule that is really a
+family rule, the design system is its authority; where the design system states a pattern, this
+file is where radiology's version of it is specified. Neither file restates the other.
+
 ## 0. Six constraints that decide every layout below
 
 These come from the site, not from taste.
