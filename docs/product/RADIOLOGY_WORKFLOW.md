@@ -99,6 +99,56 @@ Steps are the same for every modality; where they differ, §2 gives the per-moda
 table. Times are **targets**, and the measured column states honestly what has been
 measured: only the platform plumbing, against a stub backend, on one machine.
 
+The path the Alpha copilot actually runs today, drawn from the code rather than from intent —
+one study, one tab, with every branch the screen handles. The numbered failures are §3's rows.
+
+```
+ clinician at the console                     copilot (stateless)                    Gateway
+ ────────────────────────                     ────────────────                     ─────────
+ study + modality + indication  ┐
+ + technique (may be blank)     │
+ + dictation of what was seen   ├─ POST /draft ──────── governance check ─────────▶ skill
+ + previous reports (optional)  │        │               (policy, risk, downgrade)   only,
+                                ┘        │                                              never
+                                         ▼                                              a model
+                              answer readable as a report?
+                                │            │              │
+                          prose/JSON bad  truncated      five sections present
+                          F1, F26          F4              │
+                             │               │             ▼
+                          502 / 503        502      findings, impression,
+                       (no draft, nothing  (no draft  recommendations, follow_up
+                        lost: F24-F27)      withheld)        + technique if none was given
+                             │               │             │
+                             └──────┬───────┘             ▼
+                                          nine deterministic checks over the text
+                                          against the submission ── quality.scope
+                                                             │
+                                        ┌────────────────────┴───────────────────┐
+                                     block                                    advisory
+                                 F10,F19-F23                                shown, signing proceeds
+                                    │
+                        draft IS returned, with the finding on it ── confidence computed
+                                    │                                (never the model's own)
+                                    ▼
+                    radiologist edits the sections it owns ── POST /check on every pause
+                    indication locked · technique locked only when the department
+                    supplied it (ownership decides locking, report.py) · prose editable
+                                    │
+                          blocking findings remain? ── yes ──> sign refused, 422
+                                    │ no                       naming the check and the
+                                    ▼                          section, never the text (F12)
+                         name typed ── POST /review ── checks re-run on the signed text
+                                    │                     a rewritten section's findings
+                                    ▼                     fall to advisory
+                          POST /export (text | markdown | json)   409 until signed (F30)
+                                    │
+                     copy for the RIS · print · save as PDF (same DOM, print stylesheet)
+                                    │
+                                    ▼
+                          Alt+N → next study. Nothing persisted: F28, threat model §3
+```
+
 ### S0 — Registration and order (ERP)
 
 | Attribute | Specification |
@@ -400,15 +450,25 @@ document.
 | F17 | Prompt injection through the dictation or an attached document | S4 | Possibly a confident wrong report | Threat model §3: the dictation is untrusted input to a clinical act; skill instructions are fixed server-side and `extra_instructions` is only ever human-supplied |
 | F18 | PHI leaves the installation | S4/S7 | Nothing — invisible by design | Threat model §4: local-only default, no cross-hospital path without a P14 amendment, no prompt or completion text in any log |
 | F19 | A dictated observation compressed out of the findings | S4 | `dropped_observation`, **blocking**, quoting the observation that went missing | Sprint 9. Dropping is the mirror of inventing and was the more common failure; the findings must carry every dictated observation. A clinician who meant to drop one corrects the dictation or the section — the sign-off does not proceed quietly |
-| F20 | "Unchanged from prior" with no prior in the record | S4 | `invented_history`, **blocking** | Either submit the earlier report text or describe only this study. A comparison needs a second study, and a draft cannot invent one. `_prior_block()` tells the model the same thing before it answers |
+| F20 | "Unchanged from prior" with no prior in the record | S4 | `invented_history`. A phrase that dates the finding — "unchanged", "no interval change", "stable since", "prior study", "as previously described" — is **blocking**; the five that cannot be told apart by their own spelling ("compared with", "compared to", "in comparison", "as before", "resolved") are **advisory**, with a message that asks which one it is | Either submit the earlier report text or describe only this study. Genesis Night 2 split the list after measuring it: run over eleven ordinary dictated sentences the single blocking list refused four correct ones — "hypointense compared with the surrounding white matter", "a small cortical lesion is poorly resolved" — and the check catches none of the 306 measurable hallucination probes under either version, so the narrowing cost no detection. `_prior_block()` tells the model the same thing before it answers |
 | F21 | An equivocal dictation settled into a definite impression | S4 | `unsupported_certainty`, **blocking** | A hedged finding stays hedged. A differential and a confirmation are different clinical documents, and only one of them can be acted on |
 | F22 | Markdown, bullets or headings inside a section that will be printed | S4 | `format_breach`, **blocking** | The export is the artefact a referrer reads; markup in it is a defect with a visible face. Refused rather than stripped, because stripping is this application writing the report |
 | F23 | A name, MRN or accession invented into the prose | S4 | `invented_identifier`, **blocking** | The submission schema has no identifier field, so there is nothing to invent *from*; a patient who does not exist in the record must not reach the report |
+| F24 | The service is not reachable at all | S4 | Header says the copilot cannot be reached, Draft is disabled and a Retry appears; a draft attempted anyway names the same thing without a stack trace | Genesis Night 2. `GET /health` decides the button's state on load; the dictation stays on the screen because nothing was ever sent |
+| F25 | The model takes a long time | S4 | A running clock — "Drafting… 21s, a draft can legitimately take a couple of minutes" — and a Cancel button | The Gateway's policy ceiling is 90 s and this application waits 120 s, so a radiologist used to stare at an unchanged screen for two minutes and decide the product had died. Cancel aborts the fetch, keeps the dictation, files nothing |
+| F26 | Something between the browser and the service answers without JSON | S4 | "The service answered 502 without the JSON this screen expects, so there is no draft and nothing was filed" | A proxy error page, a crashed worker or a maintenance HTML page used to surface the browser's own parse error, which is not a clinical sentence. The raw body is never printed — it is where a traceback could carry submitted text, and a screenshot of that box travels |
+| F27 | A form field the endpoint will not accept | S4 | The field names and what is wrong with each, never the values | The envelope already stripped `input` and `ctx` server-side; the screen used to say "the field names are listed above" and list nothing. Proved against the missing indication |
+| F28 | The browser refreshes, or the tab closes, mid-draft | S4/S6 | The browser refuses to leave without a word, because there are unsaved words | Not solved by persistence. Draft recovery would mean writing clinical text onto a shared cart, which threat model §3 exists to forbid, so the mitigation is the warning and the operator's decision stays recorded there |
+| F29 | A clipboard write is refused | S6/S7 | "This browser refused the clipboard write, so nothing was copied. Use Export instead" — and the status line keeps saying what actually happened | Found by running the screen, not by reading it: the first version printed "copied to the clipboard" after a failed write. A radiologist who believes a report is on the clipboard pastes it into the RIS from memory |
+| F30 | Copy or export asked for before a signature | S7 | "Nothing leaves this screen unsigned — that is the workflow, not a lock you can click past", and focus moves to the sign button | `409 report_unsigned` server-side, mirrored in the client's words. The refusal is the product's claim about the department's order of work |
 
 **F10's measurement half, and F19–F23, are the failures the Alpha copilot can now detect
 from text alone** — nine deterministic checks in
 `apps/radiology_copilot/src/futurekind_radiology/quality.py`, run at draft, again on every
 keystroke that changes a checkable claim, and a third time before a signature.
+F24–F30 are the same argument on the other side of the wire: what the clinician is *told*,
+and what is kept of their work when the answer does not come. Each was exercised against the
+running screen rather than described from the code.
 F10's other half (a plausible finding nobody dictated) and F12 remain outside what text can
 prove: the images are the only oracle, and `quality.scope` states that on the screen and in
 the export rather than leaving it implied.

@@ -241,6 +241,54 @@ Open Healthcare.
 
 ---
 
+# The clinical product, as built
+
+Everything above is the platform. This is the part a radiologist touches, described the way it
+is actually assembled — seven modules, one document, four operations, no state.
+
+```
+ browser (static/index.html)  ── one origin, served by the same process
+        │  POST /draft · /check · /review · /export      GET /health
+        ▼
+ api.py            request bodies as contracts, one error envelope, nothing cached
+   ├── submission.py   what the clinician supplied. No patient identifier field, by rule
+   ├── copilot.py      the four operations. Stateless: the document travels through the caller
+   │      ├── prompt.py       the system turn, versioned so a report names its prompt
+   │      ├── gateway.py      skill-only request; the app never names a model
+   │      ├── report.py       the document: six sections + quality + confidence + provenance
+   │      │                   and the ownership rule that decides what may be typed in
+   │      ├── profiles.py     which study gets which structure checklist
+   │      └── quality.py      nine deterministic checks over text, and the confidence computed
+   │                          from them
+   └── rendering.py    the same document as text, markdown or json — one order, one heading set
+```
+
+Four decisions give the shape its meaning:
+
+- **The application is stateless on purpose.** Each operation takes the document and returns a
+  new one, so a hospital can run several instances and the record stays where the domain model
+  says a Report belongs. It also means the browser holds the only copy of a draft, which is why
+  the screen refuses to leave with unsaved words instead of persisting them.
+- **Governance is checked before the medicine is read.** Policy, risk level, skill identity and
+  downgrade come first; a perfect JSON answer under the wrong policy is refused. Truncation is
+  checked before parsing, because a half-written impression is the one artefact that reads as
+  complete.
+- **Ownership is stated per section, not per screen.** The referrer's question and the
+  department's technique line enter from the submission; when nobody supplied a technique the
+  model owns that sentence, and the screen unlocks it. Findings, impression, recommendations and
+  follow-up are drafted by the model and owned by whoever signs.
+- **The checks compare words to words and say so.** They can show a statement is unsupported by
+  what was submitted; they cannot show it is true, and none of them has seen the images. That
+  limitation travels inside the document (`quality.scope`, `confidence.basis`) rather than in a
+  README nobody re-reads at four in the afternoon.
+
+What sits outside this box and is not built: individual authentication of the signer (ADR-0004),
+the platform approvals primitive (ADR-0005), audit retention, the ERP's Approval Screen, and any
+measure of what a real model costs in seconds and tokens. The roadmap's Beta gates are those
+items, not new modules here.
+
+---
+
 # What this document is
 
 A target architecture, written before most of it existed. Read it with the inventory
@@ -254,7 +302,7 @@ to prevent. `scripts/doctor/check-citations.py` now catches that.
 | Box in this document | Status on 2026-10-08 |
 | --- | --- |
 | FutureKind Gateway (`core/gateway/`) | **Built and tested** — 492 tests: catalogue, policy, routing, LiteLLM transport, OpenAI-compatible door, logs and metrics |
-| Radiology Copilot (`apps/radiology_copilot/`) | **Built and tested** — 229 tests: draft, grounding checks, review, sign, export; 6 over real sockets. In no compose file yet |
+| Radiology Copilot (`apps/radiology_copilot/`) | **Built and tested** — 255 tests: draft, grounding checks, review, sign, export, and the reporting screen's own contracts; 6 over real sockets. In no compose file yet |
 | LiteLLM, PostgreSQL, Redis, Qdrant, Open WebUI | **Defined in `compose.yaml`**, which is the only compose tree; not started on any host from this repository, because no container daemon was available during development, so the deployment path is validated by parsing and by `docker compose config` in CI rather than by booting |
 | Audit | **Emitted, not retained.** `skill_audit` log lines exist; no storage is configured. Register row 4, and the reason Beta has a gate |
 | Authentication, Authorization, Permissions, Notifications, Secrets, SDK, CLI | **Not built.** `core/{auth,audit,cli,config,notifications,sdk}` held no files and are removed from the working tree; the Gateway's only credential is a shared API key (ADR-0004 pending) |

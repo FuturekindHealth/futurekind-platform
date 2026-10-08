@@ -10,6 +10,91 @@ The format is based on Keep a Changelog.
 
 Nothing below is tagged; the feature branch carries all of it.
 
+### Genesis Night 2 — the clinician experience (2026-10-08)
+
+The platform was assumed finished and left alone. Everything here is the reporting screen, the
+quality engine's severities, the prompt's size and the validation instrument, chosen by asking
+of each change whether it takes attention away from the person reading the images.
+
+#### Fixed
+
+- **A locked box holding the machine's own sentence.** `technique` was read-only on the screen
+  while `copilot._assemble` lets the model write it whenever the department supplies no
+  protocol — so the radiologist could not correct a guess about their own study.
+  `report.py::editable_section_keys` is now the single rule: indication always locked (it is
+  the referrer's words), technique locked only when the department wrote it, the four prose
+  sections always editable, and every locked box says whose words it holds and where to change
+  them.
+- **`invented_history` refused ordinary comparison prose.** Measured by running the engine over
+  eleven sentences a radiologist dictates into a brain report with no prior supplied: four were
+  refused wrongly, including "hypointense compared with the surrounding white matter" and "a
+  small cortical lesion is poorly resolved on this sequence". The phrase list split in two —
+  claims that name a time or the earlier exam still block; the five that cannot be told apart
+  by their own spelling advise, with a message asking which one it is. Detection is unchanged
+  at 3 of 306 measurable probes, so the check catches nothing either way and refuses less.
+- **A 498-character advisory.** `structure_coverage` fired on all eight MRI brain cases in the
+  golden set and named 9 to 12 of the protocol's fourteen structures each time. The count stays
+  exact; the list stops at six.
+- **A refused clipboard write reported success.** Found by running the screen: the status line
+  printed "copied to the clipboard" while the browser had rejected the write.
+- **Clinical responses were cacheable.** Only the HTML page said `no-store`; `/draft`,
+  `/check`, `/review`, `/export`, `/health` and the refusals said nothing, so a department
+  proxy or a shared workstation could keep a patient's report — and a 422 naming the check that
+  blocked a signature is the artefact most likely to be screenshotted into a ticket.
+  `api.py::no_response_is_cacheable` is now one rule for the surface, tested on seven paths.
+- **A non-JSON answer surfaced the browser's parse error.** A proxy error page or a dead worker
+  produced "Unexpected token 'I'…" on a clinical screen. It now names the status, says nothing
+  was filed and says what to try next — and the raw body is never printed, because that is where
+  a traceback could carry submitted text.
+- **A 422 promised field names it never showed**, and the network message promised a Retry
+  button that only appears at page load. Both now say what is actually on the screen.
+
+#### Changed
+
+- **The reporting screen works the way a radiologist reads.** `Ctrl/⌘+Enter` drafts then signs,
+  `Alt+R` re-checks, `Ctrl/⌘+Shift+C` copies the signed report for the RIS, `Ctrl+P` prints it,
+  `Alt+N` starts the next study, `Alt+D`/`Alt+M` give the reading room dark and wide modes,
+  `Esc` dismisses a failure; tab order skips what cannot be typed in; textareas grow to their
+  content; a finding that names a section is a button that focuses it and selects the quoted
+  words; the provenance collapses to the one line that is read; and the printout opens the
+  audit block the screen hides.
+- **Nothing is prefilled with clinical text.** The inputs carried a worked example — somebody's
+  headache and somebody's protocol — on a form where a real study could be reported under them.
+- **Graceful degradation for the ways AI fails.** A running clock with a Cancel that keeps the
+  dictation, the service's state decided on load, per-failure guidance drawn from the codes the
+  envelope already carries, a stale failure cleared when a later action succeeds, and a
+  signature refusal that leaves the words on the screen and names what refused them.
+- **The prompt states each rule once.** 3,097 → 2,894 characters (~723 tokens): the technique
+  instruction had been said three times, the indication twice, and the closing line enumerated
+  the five sections after the JSON contract had listed them. All twelve rules remain. Version
+  `0.3.1`, with `PROMPT_LIBRARY.md` §1 moved verbatim with it.
+
+#### Added
+
+- **`scripts/validation/audit-checks.py` table 4** — per check, how often it fires on a correct
+  draft and how often it is the sole reason such a draft cannot be signed. That second number
+  is what decides a severity, and it reclassified `dropped_observation`: 0 of 100 faithful
+  drafts, so its 86 refusals were the audit corpus's shape, and it stays blocking.
+- **`analysis()` in the dashboard** — session summary, time, edit, acceptance, trust, trend,
+  reviewer and productivity readings, plus two absolute word counts per study, because every
+  existing measure is a ratio and a ratio cannot answer "how many words did I not type today".
+  Trust is what the reviewer did after each badge, never a score pretending to know what they
+  thought. Running it found three things: a rate of 394 studies an hour off an 18-second
+  session, "1 studies", and "0.3 minutes in the room, 4.9 of them on the keyboard" — so a
+  session under ten minutes reports no rate, and impossible durations are labelled as
+  scripted.
+- **`test_screen.py`** — 19 tests that the screen applies the document's rules rather than
+  inventing its own, and that its promises about patient text hold: no browser storage, no
+  clinical text interpolated into markup, nothing fetched from another machine, a guidance
+  entry for every refusal the application can raise, and a positive control on each so an
+  absence-check cannot pass vacuously. `render_report` and `write_files` had no test at all
+  until now.
+
+Suite at the end of the night: 492 Gateway + 255 copilot + 28 dashboard = 775 tests, 0 failures;
+ruff clean; 213 citations and 50 relative links resolving. **Nothing was measured against a real
+model or a radiologist** — the prompt's behaviour, the typing reduction and the false-positive
+rate on genuine model output all still wait on the afternoon in `ROADMAP.md` §4.2.
+
 ### Sprint 11 — the radiologist in the loop (2026-10-08)
 
 Evidence, not features. The Gateway, LiteLLM, policy, routing, the architecture, compose and

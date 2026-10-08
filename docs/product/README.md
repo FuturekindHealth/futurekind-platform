@@ -10,11 +10,11 @@ as built; everything here is above it.
 
 | # | Document | What it is | Status |
 | --- | --- | --- | --- |
-| 1 | [`RADIOLOGY_WORKFLOW.md`](RADIOLOGY_WORKFLOW.md) | Patient arrival → signed report in HIS/ERP/PACS. Steps S0–S11, five modalities, 23 failures each stating whether code can detect it, the automation-bias requirements, the API surface | **S4–S6 built** for MRI brain — dictation → draft → nine checks → named sign-off → export. S0–S3, S5's viewer and S7–S11 remain design |
+| 1 | [`RADIOLOGY_WORKFLOW.md`](RADIOLOGY_WORKFLOW.md) | Patient arrival → signed report in HIS/ERP/PACS. Steps S0–S11 with the shipped path drawn from the code, five modalities, 30 failures each stating whether code can detect it, the automation-bias requirements, the API surface | **S4–S6 built** for MRI brain — dictation → draft → nine checks → named sign-off → export, plus the keyboard, print and clipboard handoff and the client's handling of six ways the AI can fail. S0–S3, S5's viewer and S7–S11 remain design |
 | 2 | [`PRODUCT_SPECIFICATION.md`](PRODUCT_SPECIFICATION.md) | Features, modules, clinical and commercial value, boundaries, release shapes, success metrics | M1 built in Alpha; the rest design |
 | 3 | [`SKILL_LIBRARY.yaml`](SKILL_LIBRARY.yaml) | 121 clinical skills, machine-checkable: risk, approval, audit, capability, status, blocker, examples | Design catalogue; **6** skills are authorised in code |
 | 4 | [`SKILL_EXAMPLES.md`](SKILL_EXAMPLES.md) | Twelve skills at wire level — the six highest-risk and six non-obvious output shapes | Design; all 12 currently return `unknown_skill` |
-| 5 | [`PROMPT_LIBRARY.md`](PROMPT_LIBRARY.md) | Six specialties, versioned prompts, constraints, output schemas, failure modes, evaluation | **1 running** (radiology `0.3.0`), 5 designs |
+| 5 | [`PROMPT_LIBRARY.md`](PROMPT_LIBRARY.md) | Six specialties, versioned prompts, constraints, output schemas, failure modes, evaluation | **1 running** (radiology `0.3.1`), 5 designs |
 | 6 | [`GOLDEN_DATASET.yaml`](GOLDEN_DATASET.yaml) | 100 representative studies, six-step scoring, pass thresholds, hallucination probes | Authored by an engineer; **`ratified: pending` on all 100** |
 | 7 | [`UI_UX.md`](UI_UX.md) | Eleven screens plus dark and tablet modes, PHI discipline, build order | Design; §6's Approval Screen has an interim version running inside the copilot |
 | 8 | [`ROADMAP.md`](ROADMAP.md) | Sprint 8–10, Beta gate G1–G9, v1, Enterprise, Cloud; risks with early warnings; what gets deleted | Plan |
@@ -33,7 +33,7 @@ as built; everything here is above it.
 | Requiring human approval | **116 of 121** |
 | Golden evaluation studies | **100** (15 normal · 20 emergency · 40 common · 15 rare · 10 medicolegal) |
 | …ratified by a clinician | **0** |
-| Prompts running in code | **1** — `radiology-report-draft/0.3.0` |
+| Prompts running in code | **1** — `radiology-report-draft/0.3.1` |
 | Deterministic safety checks on a draft | **9**, run three times (draft, every edit, before signature). Six of them can refuse the sign-off; none of them asks the model |
 | Tests in the repository | **739** — 492 Gateway and 229 copilot (both in CI), 18 on the validation dashboard (`scripts/validation/`, not in CI) |
 | Real-model latency measurements | **0.** The only timing taken is 27–30 ms against a stub |

@@ -34,12 +34,13 @@ vision and leaving it un-governed is not a decision, it is drift.
 **Alpha, built and verified:** Gateway with skill/capability/policy/alias/model namespaces,
 alias contract checked at startup, OpenAI-compatible interface, fail-closed parsing, provenance
 and policy on every answer, golden fixtures and an end-to-end test through three real uvicorn
-processes; CI on every push running both suites (492 Gateway + 229 copilot tests), ruff, the
-citation check and an image build. The radiology copilot now runs one complete clinical
-workflow — MRI brain — end to end in a browser a radiologist can use: submit, draft, edit,
-nine deterministic grounding checks, a sign-off that refuses an unsupported draft, export.
-Public-facing hygiene is done: LICENSE, README, SECURITY.md, issue templates, and no live
-infrastructure identifier in the tracked tree.
+processes; CI on every push running both suites (492 Gateway + 255 copilot tests), ruff, the
+citation check and an image build. A third suite of 28 tests covers the validation dashboard in
+`scripts/validation/`, which is **not** in CI because no CI change was authorised. The radiology
+copilot now runs one complete clinical workflow — MRI brain — end to end in a browser a
+radiologist can use: submit, draft, edit, nine deterministic grounding checks, a sign-off that
+refuses an unsupported draft, export. Public-facing hygiene is done: LICENSE, README,
+SECURITY.md, issue templates, and no live infrastructure identifier in the tracked tree.
 100 golden studies designed (unratified). 121 skills designed (6 authorised).
 **Not built:** audit retention, approvals, individual identity, a real-model latency number.
 
@@ -228,6 +229,52 @@ Steps 4 and 5 are both required: the difference between them is itself the findi
 step 4 scores the draft against the signed report the department already wrote and step 5
 scores it against what the reviewer actually did.
 
+## 4b. Genesis Night 2 — the clinician experience, changed where it cost attention
+
+The platform was left alone. Everything below is the reporting screen, the quality engine's
+severities, the prompt's size, and the validation instrument — chosen by asking of each change
+whether it removes attention from the person reading the images.
+
+**Measured, with the number that decided each change** (`scripts/validation/audit-checks.py`,
+which gained a fourth table that reports, per check, how often it fires on a correct draft and
+how often it is the *sole* reason such a draft cannot be signed):
+
+| Finding | Number | What it changed |
+| --- | --- | --- |
+| `invented_history` refused ordinary comparison prose | **4 of 11** dictated sentences refused wrongly; the check catches **0 of 306** hallucination probes under either wording | The phrase list split: temporal claims still block, the five ambiguous ones advise |
+| `dropped_observation` blocking 87 of 100 goldens | **0 of 100** on a faithful draft that carries the dictation | Nothing — the 87 was the audit corpus's shape, not the product's behaviour. Left blocking |
+| `structure_coverage` on MRI brain | fires on **8 of 8** profile-matched correct drafts, naming **9–12** of 14 structures, a **498-character** finding | The named list caps at six; the count stays exact |
+| Prompt size | 3,097 → 2,894 characters (~723 tokens), each rule stated once | Technique had been instructed three times, the indication twice, the sections three times |
+| Section locking | technique was locked unconditionally while `copilot._assemble` lets the model write it when the department supplies nothing | `report.py::editable_section_keys` — ownership decides locking, and every locked box says whose words it holds |
+| Clipboard | the screen printed "copied to the clipboard" after a **refused** write | Success is now claimed only on success |
+| Caching | only the HTML page said `no-store`; four clinical endpoints and the refusals said nothing | One middleware, proved across seven response paths |
+
+**Verified by running it, not by reading it:** the screen was driven against the real
+application over a scripted Gateway — draft, edit into a blocking finding, click the finding,
+correct it, sign by keyboard, copy, print, start the next study — and six failure modes: prose
+answer, non-JSON answer, missing form field, service dying mid-session, a 25-second draft
+cancelled at the eleventh second, and an abandoned study. The dashboard was run for two studies
+through `/report`. Pointer input is unavailable in this browser surface, so clicks were
+dispatched as DOM events and the structure was read from the accessibility tree: **no pixels
+were seen**, and the first real afternoon should include five minutes of a radiologist looking
+at it.
+
+**Remaining weaknesses, ranked.**
+
+1. Nothing here was measured against a real model or a radiologist. Every behavioural claim
+   about the prompt, and the whole value of typing reduction, waits on §4.2.
+2. `GOLDEN_DATASET.yaml` is still `ratified: pending` on all 100, and one expected answer
+   (`E-03`) states a 72 mL mismatch that is arithmetic on two dictated volumes — the gate
+   refuses it, and the dataset is wrong rather than the engine.
+3. The screen still attests rather than authenticates: the signing name is typed (F13/G1).
+4. No draft recovery across a refresh, by decision (F28), not by omission.
+5. A signed report can be printed without a watermark (threat model §3), so a leaked print is
+   not traceable.
+6. `dropped_observation`'s real false-positive rate on *model* output is still unknown; the
+   0-of-100 above is against a faithful draft, which is the best case.
+7. The 28 dashboard tests are not in CI, so the instrument's arithmetic is guarded only if
+   somebody runs it.
+
 ## 5. Alpha → Beta gate
 
 Beta is a **claim change**, not a feature set: in Alpha the copilot says "a human reviewed
@@ -242,7 +289,8 @@ human granted it". To make that sentence true:
 | **G4** | Orthanc authenticated, CORS restricted, port not published (threat model F-C) | Hospital config, **hours** | — |
 | **G5** | Golden set ratified (Sprint 10) and the emergency/medicolegal safety gate passing | see Sprint 10 | — |
 | **G6** | Study Queue + `/triage` with documented degradation to acquisition order | 4–6 d | 8.0 latency |
-| **G7** | Approval Screen and Audit Timeline as specified (`UI_UX.md` §6, §7) | 5–8 d | G1–G3. **Half met:** the copilot ships a working review-and-sign screen with the nine checks, the computed confidence and the blocking gate (`static/index.html`, `POST /check`). What remains is the ERP-integrated screen, the Audit Timeline, and a signer bound to a session rather than a typed name |
+| **G7** | Approval Screen and Audit Timeline as specified (`UI_UX.md` §6, §7) | 5–8 d | G1–G3. **More than half met:** the copilot ships a working review-and-sign screen with the nine checks, the computed confidence and the blocking gate — and since Genesis Night 2 a keyboard path, ownership-based locking, print and clipboard handoff, dark and reading modes, and per-failure guidance for six ways the AI can fail (`static/index.html`, `test_screen.py`). What remains is the ERP-integrated screen, the Audit Timeline, and a signer bound to a session rather than a typed name |
+| **G10** | Watermark on every printed and exported report (signatory + request id) | 1–2 d | Threat model §3, last row. The print stylesheet is the product's own now, so there is somewhere to put it: today a leaked printout is untraceable |
 | **G8** | `/events` receiver (HMAC verify + idempotency + correlation) so withdrawals reach us | 2–3 d | integration §5 |
 | **G9** | 10–15 skills authorised in `models.yaml`, each reviewed one at a time | 1 d per skill + clinical review | clinical owner time — the true bottleneck |
 
@@ -264,7 +312,8 @@ can ask for it.
 | Search + metrics view (rewrite rate, refusal rate, p50/p95 latency) | 4–6 d | The only thing that lets a department trust the tool over time |
 | Role model per department (radiologist vs technician vs coder), if `caller` scopes were added | 4–6 d | Procurement asks for it |
 | PCPNDT surface: render the two `409`s as *waiting on the hospital*, and record Form F state in the queue | 2 d | **Statutory.** Ultrasound at this site without it is not deployable |
-| Dark mode + tablet pass (`UI_UX.md` §10, §11) | 3–5 d | Adoption, in the room where the work happens |
+| Dark mode + tablet pass (`UI_UX.md` §10, §11) | 1–3 d (was 3–5) | Dark and reading modes shipped on the copilot's own screen in Genesis Night 2, with the print stylesheet forcing light paper; what remains is the tablet reflow and the colour pass on the ERP panes |
+| RIS/PACS handoff for the signed report, replacing copy-and-paste | 4–6 d | Copying into the RIS is how the work actually moves today, and threat model §3 records it as an open, accepted exposure: clipboard text outlives the tab on a shared cart. The handoff is what closes that row rather than a smarter button |
 
 **v1 total: ~35–55 d estimate.**
 
