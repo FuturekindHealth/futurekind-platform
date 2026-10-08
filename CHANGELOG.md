@@ -96,6 +96,12 @@ extended, and the decisions that let the next application be authored rather tha
   discharge, beds, NABH indicators and turnaround time have no named table or screen in this
   repository, so eight applications currently rest on assumption. The two-day fix is the inventory
   walk whose template already exists.
+- **The eighteen ungoverned paths now have a taker.** `APPLICATION_MAP.md` §3.1 maps each of the
+  ERP's eighteen AI entry points to the application that absorbs it, the refusal that does not, or
+  the deletion that should: **eight become an application's job, eight are refused or deleted with a
+  named reason, two stay as operator tooling that never belonged on a clinical surface.** The four
+  reasons behind the refusals — vision, a job model, speech, non-clinical documents — are each a
+  `SPECIFICATION.md` §17 entry, so nothing is left ungoverned by accident.
 - **One drifted pointer, fixed:** the substantive-rewrite metric was cited as "§5 of the workflow"
   in `ROADMAP.md`; §5 is API requirements and the content is `RADIOLOGY_WORKFLOW.md:381`, inside S11.
 - **A gap named rather than papered over:** the built screen carries five `aria-*`/`role` attributes

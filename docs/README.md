@@ -26,7 +26,7 @@ somewhere else.**
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | The target stack, and the clinical product **as built** — the seven modules, the four operations, the decisions that give the shape its meaning | Version numbers, and any claim about a box that does not exist |
 | [`architecture/gateway-routing.md`](architecture/gateway-routing.md) | How a request reaches a model: the chain, attempts, degradation, timeouts | What a request may contain (that is the specification) |
 | [`architecture/gateway-policy.md`](architecture/gateway-policy.md) | The policy layer: risk ladder, validation rules, approval and audit requirements | Which model answers. Never |
-| [`architecture/APPLICATION_MAP.md`](architecture/APPLICATION_MAP.md) | Which applications exist, what each calls, what each reads and writes, where its record lives, and what configuration a new one needs | The words, the product choice, the screens, the sequence |
+| [`architecture/APPLICATION_MAP.md`](architecture/APPLICATION_MAP.md) | Which applications exist, what each calls, what each reads and writes, where its record lives, and what configuration a new one needs — including §3.1, the ERP's eighteen ungoverned AI paths mapped to the application, refusal or deletion that takes each one | The words, the product choice, the screens, the sequence |
 
 ## 3. The product layer
 

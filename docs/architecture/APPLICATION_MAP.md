@@ -90,6 +90,46 @@ loads. Everything else is what the application *would* name, cited to its design
 
 ---
 
+### 3.1 The eighteen ungoverned paths, and which application takes each one over
+
+The family's first customer-visible job is not new AI; it is consolidation. The ERP has eighteen
+numbered HTTP entry points that reach a model (`../integration/AI_ENTRY_POINTS_CARE_ERP.md:72-91`),
+and exactly one of them goes through the Gateway (`:74`, Sprint 8, still uncommitted in that
+working tree — `docs/product/README.md:22`). Each row is what an application must be able to say
+when it takes the path over.
+
+| # | Today's path | What it does | Taken over by | What must be true first |
+| --- | --- | --- | --- | --- |
+| 1 | `:74` | Ultrasound chip suggestions | **#1 Radiology**, already | Merge the ERP branch; the skill is authorised (`core/gateway/models.yaml:104`) |
+| 2 | `:75` | Deterministic accept of a suggestion | **#1 Radiology** | No model call, so nothing to govern — but the accept must stay a human act |
+| 3 | `:76` | Eight radiology actions, model chosen per request | **#1 Radiology**, as named skills | One stanza per action in `models.yaml`, or the actions collapse into `radiology-report` deliberately |
+| 4 | `:77` | Multi-review, permission bug and provider from the request body | **#13 Clinical QA** (peer review) | The permission bug is a security fix, not an AI decision; a caller-named provider must go (P16) |
+| 5 | `:78` | Test, verify and pipeline self-test | **No application** — these are operator tools | Keep them outside the clinical surface; they name models, which is correct for a test harness |
+| 6 | `:79` | Patient message, radiology impression, clinical note, billing insight, teaching, transcribe-polish | **#7 Discharge**, **#3 Physician**, **#8 Coding**, **#11 Patient-Facing** | Each becomes its own skill; the shared `generateAiForTask` seam is the reason one migration can cover many |
+| 7 | `:80` | Transcription through a vendor API with the key in a query string | **Refused** as an application (`PRODUCT_BIBLE.md` §3.4) | The credential is the emergency, not the AI. There is no speech path in the platform to migrate to |
+| 8 | `:81` | Local speech-to-text, raw fetch | **Refused**, same reason | Same |
+| 9 | `:82` | Image comparison, provider named by the client | **No application** — the platform has no vision capability | Either it stays outside with an explicit decision recorded, or a `vision` capability is proposed as a platform change, which tonight's brief forbids |
+| 10 | `:83` | Prompt-library test | **No application** | Authoring tooling; belongs beside `PROMPT_LIBRARY.md`, governed as a developer path |
+| 11 | `:84` | Reporting query, draft, polish, image review, RAG | **#10 Timeline** and **#12 Knowledge** — both blocked | RAG needs ADR-0006; the image route needs the vision decision above |
+| 12 | `:85` | Dead `ai-enhance` route, zero front-end callers | **Deleted** | A route nothing calls is not a migration, it is a removal |
+| 13 | `:86` | Voice report composer, raw fetch bypassing the provider package | **#1 Radiology** (dictation is its input) | The microphone stays; the fetch goes through a skill |
+| 14 | `:87` | Report composer with a vision trial | **#1 Radiology** for text; vision as in row 9 | Same split |
+| 15 | `:88` | Nightly batch generation | **No application** | Batch is a job model the platform does not have; this is the gap the ERP already fills outside |
+| 16 | `:89` | Fetal USG and echocardiography drafts | **#1 Radiology**, as two profiles | `us-obstetric-*` `SKILL_LIBRARY.yaml:480-536` and `echocardiogram-report` `:1157` exist as designs; PCPNDT rules travel with the fetal one |
+| 17 | `:90` | Accounting, invoice, bank-statement and ID-card OCR | **#8 Coding**'s boundary, and mostly **not ours** | Non-clinical documents with personal data; the ask is credentials and logging, not a copilot |
+| 18 | `:91` | Knowledge-base search for AI callers | **#12**, blocked | ADR-0006, and its token scope already forbids clinical writes (`../integration/INTEGRATION_CARE_ERP_PACS.md:52-56`) |
+
+**What this table is for.** It turns the family plan into a migration order with a customer-visible
+result, and the count is the point: of eighteen paths, **eight become an application's job** (1, 2,
+3, 4, 6, 13, 14, 16), **eight are refused or deleted with a named reason** (7, 8, 9, 11, 12, 15, 17,
+18), and **two stay as operator tooling that should never have sat on a clinical surface** (5, 10).
+The four reasons behind the refusals are vision, a job model, speech, and documents that are not
+clinical — each of them an entry in `../SPECIFICATION.md` §17 or a capability the constitution has
+not been amended to allow, rather than a gap nobody looked at. That is what makes this a plan and
+not a list: nothing is left ungoverned by accident.
+
+---
+
 ## 4. Three authorised skills that nothing calls
 
 `core/gateway/models.yaml` carries six stanzas. One is called by an application in this
