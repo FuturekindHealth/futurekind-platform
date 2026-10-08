@@ -108,7 +108,8 @@ skills:
     description: Propose advisory ultrasound findings and impression text for a radiologist to accept or reject.
 
     # Migrated in Sprint 8 from the CARE ERP's own USG assistant
-    # (`care-on-synology1` `lib/ai/usgGatewayProvider.ts`), which called a model
+    # (`care-erp` `lib/ai/usgGatewayProvider.ts` — a documentation name for that
+    # checkout, not a path), which called a model
     # directly and resolved its model name from `ai_provider_settings` /
     # `ai_model_routes`. The prompt, the JSON contract and the safety funnel are
     # unchanged and still live in the ERP; only the transport and the governance
