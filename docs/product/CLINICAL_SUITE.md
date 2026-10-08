@@ -163,7 +163,7 @@ structured findings (§2) makes possible. Same dependency, same order.
 
 ## 7. Patient-facing text
 
-Three skills, one surface (`PRODUCT_BIBLE.md` §3.2, #11): the plain-language summary, the
+Three skills, one surface (`PRODUCT_BIBLE.md` §3.2, #12): the plain-language summary, the
 pre-procedure instruction, and the fasting/medication instruction. Two rules make this different
 from every other application in the suite:
 
@@ -186,7 +186,7 @@ rule belongs to every patient-facing document in India, not only to ultrasound.
 | Console | The rule that keeps it honest | First three indicators worth printing |
 | --- | --- | --- |
 | **Hospital Command Center** | **No metric without a counted event and a written definition.** `turnaround-time-brief` `SKILL_LIBRARY.yaml:1591` and `cohort-extraction` `:1566` are the two skills that expose this: a TAT number needs a start event and an end event in the ERP, and a cohort needs ADR-0007. Printing "reports/hour" from an 18-second session is the mistake the validation dashboard already refuses to make (`ROADMAP.md` §4b) | Studies signed same day; median TAT by modality; drafts produced vs drafts signed unchanged |
-| **Clinical QA and Peer Review** | It measures *people and process*, so it must be legible to the person being measured, and its numbers must be reproducible from stored rows. `scripts/validation/dashboard.py` already does exactly this for one department (`APPLICATION_MAP.md` row #13) | Blocking findings per 100 correct drafts (table 4's number); substantive amendment rate, once the classification named in `RADIOLOGY_WORKFLOW.md:381` exists; critical-value acknowledgement rate |
+| **Clinical QA and Peer Review** | It measures *people and process*, so it must be legible to the person being measured, and its numbers must be reproducible from stored rows. `scripts/validation/dashboard.py` already does exactly this for one department (`APPLICATION_MAP.md` row #14) | Blocking findings per 100 correct drafts (table 4's number); substantive amendment rate, once the classification named in `RADIOLOGY_WORKFLOW.md:381` exists; critical-value acknowledgement rate |
 
 `quality-indicator-audit` `SKILL_LIBRARY.yaml:1454` and NABH-facing reporting belong here, and so
 does the discipline the roadmap already states about accreditation: the platform can produce the

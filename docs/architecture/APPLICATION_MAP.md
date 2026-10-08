@@ -69,7 +69,9 @@ and it never appears in a request (`../CONSTITUTION.md:391-396`).
 
 "Skills named today" means present in `core/gateway/models.yaml`, the only file the platform
 loads. Everything else is what the application *would* name, cited to its design entry in
-`SKILL_LIBRARY.yaml`.
+`SKILL_LIBRARY.yaml`. **Numbering is the Bible's** (`../product/PRODUCT_BIBLE.md` §3), so #11 is
+absent here on purpose: the Audit Timeline is a reader view of #10, not a second surface, and the
+refused Medical Scribe has no number at all.
 
 | # | Application | Process and door | Skills named today | Skills it would add | Reads (canonical objects) | Writes to | Screens | State |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -83,10 +85,10 @@ loads. Everything else is what the application *would* name, cited to its design
 | 8 | **Coding Assistant** | new `apps/coding_assistant/` | none | `icd10-coding-suggestion` `:1406`, `procedure-coding-suggestion` `:1418`, `prior-authorisation-letter` `:1430`, `claim-appeal-draft` `:1442` | Diagnosis, Procedure, Report | A claim draft a human coder edits; **never the claim itself** (`PRODUCT_BIBLE.md` §6.4) | `CLINICAL_SUITE.md` §6 | Design |
 | 9 | **Tumour Board Copilot** | new `apps/tumour_board_copilot/` | none | `tumour-board-summary` `:1218`, `tumour-staging-note` `:1231`, `oncology-treatment-plan` `:1243`, `survivorship-care-plan` `:1256`, `palliative-care-plan` `:1268` | Diagnosis, Stage, Report, Task (one per member action) | The board record | `CLINICAL_SUITE.md` §6 | Design, **cannot ship before ADR-0005** |
 | 10 | **Clinical Timeline** (+ Audit view) | a view in the ERP, or one read-only service | none — it calls no skill | none; the comparison it enables is `prior-study-comparison` `:1541`, which is a skill and must not be confused with the surface | Every object above, ordered | Nothing | `UX_GUIDE.md` §4 | Design, **blocked on ADR-0007** |
-| 11 | **Patient-Facing Text** | a view inside the Discharge and Emergency copilots | none | `patient-explainer` `:1467` (merged with `plain-language-report` `:1479`), `pre-procedure-instructions` `:1491`, `fasting-and-medication-instruction` `:1503` | Report, Recommendation, Instruction | A printed or messaged leaflet, after a clinician approves it | `CLINICAL_SUITE.md` §7 | Design |
-| 12 | **Hospital Command Center** | console; reads, drafts nothing | none | `turnaround-time-brief` `:1591`, `quality-indicator-audit` `:1454`, `cohort-extraction` `:1566` *(blocked)* | Counts over Study, Report, Approval, Task | Nothing clinical | `CLINICAL_SUITE.md` §8 | Design, **blocked on ADR-0007** |
-| 13 | **Clinical QA and Peer Review** | console, and one instrument that already exists | none | `quality-indicator-audit` `:1454`, plus peer review of Reports | Rows the review instrument already writes (`scripts/validation/dashboard.py`) | Nothing clinical; QA findings are **audit issues**, not Reports | `CLINICAL_SUITE.md` §8 | **Prototype built** |
-| 14 | **Medical Scribe** | the ERP's microphone, not a FutureKind process | none — and it must not gain one | the polish step only, on text | Dictation as text | The dictation field of whichever copilot is open | `CLINICAL_SUITE.md` §7 | **Refused as an application** (`PRODUCT_BIBLE.md` §3.4) |
+| 12 | **Patient-Facing Text** | a view inside the Discharge and Emergency copilots | none | `patient-explainer` `:1467` (merged with `plain-language-report` `:1479`), `pre-procedure-instructions` `:1491`, `fasting-and-medication-instruction` `:1503` | Report, Recommendation, Instruction | A printed or messaged leaflet, after a clinician approves it | `CLINICAL_SUITE.md` §7 | Design |
+| 13 | **Hospital Command Center** | console; reads, drafts nothing | none | `turnaround-time-brief` `:1591`, `quality-indicator-audit` `:1454`, `cohort-extraction` `:1566` *(blocked)* | Counts over Study, Report, Approval, Task | Nothing clinical | `CLINICAL_SUITE.md` §8 | Design, **blocked on ADR-0007** |
+| 14 | **Clinical QA and Peer Review** | console, and one instrument that already exists | none | `quality-indicator-audit` `:1454`, plus peer review of Reports | Rows the review instrument already writes (`scripts/validation/dashboard.py`) | Nothing clinical; QA findings are **audit issues**, not Reports | `CLINICAL_SUITE.md` §8 | **Prototype built** |
+| — | **Medical Scribe** | the ERP's microphone, not a FutureKind process | none — and it must not gain one | the polish step only, on text | Dictation as text | The dictation field of whichever copilot is open | `CLINICAL_SUITE.md` §7 | **Refused as an application** (`PRODUCT_BIBLE.md` §3.4) |
 
 ---
 
@@ -103,21 +105,21 @@ when it takes the path over.
 | 1 | `:74` | Ultrasound chip suggestions | **#1 Radiology**, already | Merge the ERP branch; the skill is authorised (`core/gateway/models.yaml:104`) |
 | 2 | `:75` | Deterministic accept of a suggestion | **#1 Radiology** | No model call, so nothing to govern — but the accept must stay a human act |
 | 3 | `:76` | Eight radiology actions, model chosen per request | **#1 Radiology**, as named skills | One stanza per action in `models.yaml`, or the actions collapse into `radiology-report` deliberately |
-| 4 | `:77` | Multi-review, permission bug and provider from the request body | **#13 Clinical QA** (peer review) | The permission bug is a security fix, not an AI decision; a caller-named provider must go (P16) |
+| 4 | `:77` | Multi-review, permission bug and provider from the request body | **#14 Clinical QA** (peer review) | The permission bug is a security fix, not an AI decision; a caller-named provider must go (P16) |
 | 5 | `:78` | Test, verify and pipeline self-test | **No application** — these are operator tools | Keep them outside the clinical surface; they name models, which is correct for a test harness |
-| 6 | `:79` | Patient message, radiology impression, clinical note, billing insight, teaching, transcribe-polish | **#7 Discharge**, **#3 Physician**, **#8 Coding**, **#11 Patient-Facing** | Each becomes its own skill; the shared `generateAiForTask` seam is the reason one migration can cover many |
+| 6 | `:79` | Patient message, radiology impression, clinical note, billing insight, teaching, transcribe-polish | **#7 Discharge**, **#3 Physician**, **#8 Coding**, **#12 Patient-Facing** | Each becomes its own skill; the shared `generateAiForTask` seam is the reason one migration can cover many |
 | 7 | `:80` | Transcription through a vendor API with the key in a query string | **Refused** as an application (`PRODUCT_BIBLE.md` §3.4) | The credential is the emergency, not the AI. There is no speech path in the platform to migrate to |
 | 8 | `:81` | Local speech-to-text, raw fetch | **Refused**, same reason | Same |
 | 9 | `:82` | Image comparison, provider named by the client | **No application** — the platform has no vision capability | Either it stays outside with an explicit decision recorded, or a `vision` capability is proposed as a platform change, which tonight's brief forbids |
 | 10 | `:83` | Prompt-library test | **No application** | Authoring tooling; belongs beside `PROMPT_LIBRARY.md`, governed as a developer path |
-| 11 | `:84` | Reporting query, draft, polish, image review, RAG | **#10 Timeline** and **#12 Knowledge** — both blocked | RAG needs ADR-0006; the image route needs the vision decision above |
+| 11 | `:84` | Reporting query, draft, polish, image review, RAG | **#10 Timeline** and the **Knowledge Assistant** — both blocked | RAG needs ADR-0006; the image route needs the vision decision above |
 | 12 | `:85` | Dead `ai-enhance` route, zero front-end callers | **Deleted** | A route nothing calls is not a migration, it is a removal |
 | 13 | `:86` | Voice report composer, raw fetch bypassing the provider package | **#1 Radiology** (dictation is its input) | The microphone stays; the fetch goes through a skill |
 | 14 | `:87` | Report composer with a vision trial | **#1 Radiology** for text; vision as in row 9 | Same split |
 | 15 | `:88` | Nightly batch generation | **No application** | Batch is a job model the platform does not have; this is the gap the ERP already fills outside |
 | 16 | `:89` | Fetal USG and echocardiography drafts | **#1 Radiology**, as two profiles | `us-obstetric-*` `SKILL_LIBRARY.yaml:480-536` and `echocardiogram-report` `:1157` exist as designs; PCPNDT rules travel with the fetal one |
 | 17 | `:90` | Accounting, invoice, bank-statement and ID-card OCR | **#8 Coding**'s boundary, and mostly **not ours** | Non-clinical documents with personal data; the ask is credentials and logging, not a copilot |
-| 18 | `:91` | Knowledge-base search for AI callers | **#12**, blocked | ADR-0006, and its token scope already forbids clinical writes (`../integration/INTEGRATION_CARE_ERP_PACS.md:52-56`) |
+| 18 | `:91` | Knowledge-base search for AI callers | **#10** and the Knowledge Assistant — blocked | ADR-0006, and its token scope already forbids clinical writes (`../integration/INTEGRATION_CARE_ERP_PACS.md:52-56`) |
 
 **What this table is for.** It turns the family plan into a migration order with a customer-visible
 result, and the count is the point: of eighteen paths, **eight become an application's job** (1, 2,
@@ -161,10 +163,10 @@ disable the stanza, and it is a decision for the platform owner (`PRODUCT_BIBLE.
                                         (docs/product/README.md:111-115)
 
    ADR-0003 retention ─────────┬─> Audit view of #10, Medicolegal summary
-                                └──> #13's indicator history
+                                └──> #14's indicator history
                                      └─ substitute: provenance stored on the document
 
-   ADR-0007 Hospital + Patient Context ──> #10, #12, and any cohort
+   ADR-0007 Hospital + Patient Context ──> #10, #13, and any cohort
                                      └─ substitute: none. Do not guess an identifier
                                         (../DOMAIN_MODEL.md Q2)
 
@@ -215,7 +217,7 @@ It contains **no named table or screen** for registration and orders, wards, ICU
 clinical object, discharge, pharmacy administration, implants, beds, infection control, NABH
 indicators or turnaround time.
 
-Applications #3–#8, #12 and #13 therefore map onto records whose existence is assumed. Before
+Applications #3–#8, #13 and #14 therefore map onto records whose existence is assumed. Before
 any of them is estimated or scheduled, the ERP has to be walked and written down the way the
 radiology path was — the entry-point inventory in `../integration/AI_ENTRY_POINTS_CARE_ERP.md`
 is the template, and its 18 numbered entry points are the proof that the walk is a day's work,
