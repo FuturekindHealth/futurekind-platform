@@ -10,6 +10,104 @@ The format is based on Keep a Changelog.
 
 Nothing below is tagged; the feature branch carries all of it.
 
+### Genesis Night 3 — the clinical operating system, designed (2026-10-09)
+
+Design work, deliberately: the brief was everything **above** the platform, and the platform was
+left alone. **No code, configuration, test or compose file changed.** Nine new documents, three
+extended, and the decisions that let the next application be authored rather than argued about.
+
+#### Added
+
+- **[`docs/README.md`](docs/README.md)** — the ownership index of the whole document set: what each
+  document is responsible for and where it must stop. It exists because P18 makes a second owner of
+  one concept a defect, and because a set this size will drift without one.
+- **[`docs/product/PRODUCT_BIBLE.md`](docs/product/PRODUCT_BIBLE.md)** — the family: fourteen
+  applications in three kinds (copilot, surface, console), four tests every one must pass, the
+  shared-component inventory, and the refusals. Four of the brief's twenty products merged
+  (Multidisciplinary into Tumour Board, Audit Timeline into a view of Clinical Timeline, Patient
+  Summary into documents, Referral Intelligence split into the letter and the cohort question);
+  three refused outright — Scribe (no speech path exists and adding one is a platform change),
+  Clinical Search (an EHR capability, and a second index would be a second copy of patient text),
+  and the Knowledge Assistant (no citation capability, so no application may present recalled text
+  as a guideline).
+- **[`docs/product/CLINICAL_SUITE.md`](docs/product/CLINICAL_SUITE.md)** — each application's design
+  as five decisions: document shape, profiles, measured checks, versioned prompt, system of record.
+  Radiology 2.0 ranked against what the repository actually holds, which produced the honest finding
+  that **PI-RADS, LI-RADS, Bosniak, SONAQ and Fazekas appear nowhere** — no skill, no profile, no
+  case — while BI-RADS, TI-RADS, Lung-RADS-style, ASIA and GCS already do.
+- **[`docs/architecture/APPLICATION_MAP.md`](docs/architecture/APPLICATION_MAP.md)** — what one
+  application consists of (five specialty-specific files, eight that are the pattern), and the
+  falsifiable rule it is drawn to: `SPEC-12-04`, a credential and a skill name, no platform change,
+  never a LiteLLM key.
+- **[`docs/clinical/HOSPITAL_WORKFLOW.md`](docs/clinical/HOSPITAL_WORKFLOW.md)** — arrival to
+  follow-up with every node marked: what AI may help with, what it may never do, and whether the
+  claim rests on a documented record or an assumption. The consolidated never-list lives here and
+  nowhere else.
+- **[`docs/design/DESIGN_SYSTEM.md`](docs/design/DESIGN_SYSTEM.md)** and
+  **[`docs/design/UX_GUIDE.md`](docs/design/UX_GUIDE.md)** — one language across fourteen
+  applications: the ten tokens and the four semantic colours read out of the built screen, the
+  keyboard map, the eleven patterns, review-and-approval as one pattern for every department, then
+  the screen inventory, role behaviour, cross-application handoff and the three-part shape of every
+  failure sentence.
+- **[`docs/safety/CLINICAL_SAFETY.md`](docs/safety/CLINICAL_SAFETY.md)** — the difference between
+  being tricked and being believed: what each risk rung forces a product to show, what the product
+  may and may not claim about a document, six automation-bias obligations, **five gates before an
+  application touches a patient**, the contraindications, and an eight-row safety register.
+- **[`docs/business/COMMERCIAL_ROADMAP.md`](docs/business/COMMERCIAL_ROADMAP.md)** — six motions,
+  which application suits which, and the commercial refusals. Local-first and P14 decide the shape
+  before any market talk: no hosted inference, no multi-tenant analytics, no per-study billing.
+- **[`docs/VISION-2035.md`](docs/VISION-2035.md)** — the hospital in 2035 as workflow, not
+  technology: what disappears, what becomes easier, what becomes newly dangerous (deskilling,
+  automation drift, metric gaming), and the three questions that decide whether any of it happened.
+
+#### Decided
+
+- **R4, adopted: an Agent gets no directory.** It is the name for the four authoring files an
+  application already ships — prompt, profiles, document shape and ownership, specialty check lists.
+  `agents/` was deleted on 2026-10-08 and does not come back; the collision R4 named is resolved by
+  describing what exists rather than by adding a layer.
+- **R5, adopted — and its cost stated.** The engineering vocabulary moves to *audit issue*, leaving
+  *findings* to the clinical sense. The rename is **not** doc-only: `quality.findings` is the
+  machine's objection in the same file as the clinician's `findings` section
+  (`apps/radiology_copilot/src/futurekind_radiology/report.py:288-306`, `:376`), so it is listed in
+  `ROADMAP.md` §10 as a change that needs a feature to carry it, with an interim naming rule.
+- **Q5 answered in design: the EHR owns the workflow.** FutureKind owns the request and nothing that
+  outlives it — no engine, no timers, no queue, no second store. Four refusals follow, in
+  `HOSPITAL_WORKFLOW.md` §6.
+- **Q2 and the identifier: a position, not an answer.** The application holds the Patient Context and
+  the Gateway never receives one, which is what `submission.py:15` already enforces. The identifier
+  *format* stays a clinical decision, and that is why the Timeline is designed only as a read-model.
+- **`ROADMAP.md` §12:** the family sequence in four waves, with a promotion rule that puts ratified
+  cases and measured checks before any new screen, and an explicit list of what is in no wave.
+
+#### Found, because writing the map meant reading the configuration
+
+- **Not one of the six authorised skills is `critical`, and none can be.** Declaring
+  `approval_required` on a critical skill makes every request a `403`; omitting it fails catalogue
+  load. So 37 designed critical skills are either unauthorisable or authored down to `high` — the
+  radiology skill among them, on an engineer's judgement that has never been confirmed (Q6).
+- **Three authorised skills are called by nothing:** `pathology-review`, `clinical-chat` and
+  `summarize-document`. A skill a script can reach and a clinician cannot is the platform's own
+  ungoverned path, and the map says so with a deletion item attached.
+- **The evaluation base covers one department.** All 100 golden cases are imaging (36 CT, 20 US,
+  17 XR, 17 MRI, 5 CTA, 3 MG, 1 HRCT, 1 CTP), so thirteen of fourteen applications have no ratified
+  evidence at all — which is the real first cost of the family, not code.
+- **The ERP is documented for radiology only.** Registration, wards, ICU, theatre, implants,
+  discharge, beds, NABH indicators and turnaround time have no named table or screen in this
+  repository, so eight applications currently rest on assumption. The two-day fix is the inventory
+  walk whose template already exists.
+- **One drifted pointer, fixed:** the substantive-rewrite metric was cited as "§5 of the workflow"
+  in `ROADMAP.md`; §5 is API requirements and the content is `RADIOLOGY_WORKFLOW.md:381`, inside S11.
+- **A gap named rather than papered over:** the built screen carries five `aria-*`/`role` attributes
+  across more than a thousand lines. The colour-plus-word rule holds; the semantics do not, and each
+  new application is required to add them instead of copying the deficit.
+
+Suite unchanged and re-verified: **775 tests** (492 Gateway, 255 copilot, 28 dashboard), 0 failures;
+`ruff check src tests` clean in both packages; **407 `path:line` citations** now resolving, up from
+213 at the start of the night; relative links resolve; no CRLF in `.py` or `.sh`. **Nothing in this
+section was measured against a real model or a radiologist** — the first gate in
+`CLINICAL_SAFETY.md` §6 is still the one afternoon in `ROADMAP.md` §4.2.
+
 ### Genesis Night 2 — the clinician experience (2026-10-08)
 
 The platform was assumed finished and left alone. Everything here is the reporting screen, the
