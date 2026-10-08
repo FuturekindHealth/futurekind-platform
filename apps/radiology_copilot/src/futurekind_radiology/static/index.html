@@ -1,0 +1,658 @@
+<!doctype html>
+<!--
+  FutureKind Radiology Copilot — the reporting screen.
+
+  One file, no framework, no build step, and deliberately **no external resource**:
+  a hospital ward network is not allowed to need the internet to report a scan, and
+  a font or script fetched from a CDN would send the fact that a radiologist is at
+  work to somebody else's access log. System fonts only.
+
+  What this page holds, and what it does not:
+  - It holds the current draft in memory, in this tab, and nowhere else. Nothing is
+    written to localStorage, sessionStorage, cookies or indexed DB: a shared
+    department workstation must not keep the last patient on it for the next user.
+  - It authenticates nobody. The clinician types their own name into the sign-off
+    box, which is an attestation, not a login — binding that name to a real session
+    is ADR-0004 and does not exist yet. Run this behind the hospital's own sign-in.
+  - It cannot see the images. The quality panel compares the draft with the text
+    that was submitted. That is stated on the panel rather than left implicit,
+    because a reviewer who believes a green tick means "the report matches the
+    study" is worse off than one who was told.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Radiology Copilot</title>
+    <style>
+      :root {
+        --ink: #16202b;
+        --muted: #5b6b7c;
+        --line: #d3dbe3;
+        --bg: #f4f6f8;
+        --card: #ffffff;
+        --block: #b4232c;
+        --advisory: #9a6a00;
+        --clear: #1d6b3f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        font-size: 16px;
+        line-height: 1.45;
+      }
+      header {
+        background: var(--card);
+        border-bottom: 1px solid var(--line);
+        padding: 12px 20px;
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      header h1 {
+        font-size: 18px;
+        margin: 0;
+        font-weight: 650;
+      }
+      header .state {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      header .banner {
+        margin-left: auto;
+        font-size: 13px;
+        font-weight: 650;
+        color: var(--block);
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(300px, 380px) minmax(0, 1fr) minmax(240px, 320px);
+        gap: 16px;
+        padding: 16px;
+        align-items: start;
+      }
+      @media (max-width: 1100px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+      section {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 14px 16px;
+      }
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 10px;
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin: 10px 0 3px;
+      }
+      input,
+      textarea,
+      select,
+      button {
+        font: inherit;
+        width: 100%;
+        padding: 7px 9px;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        background: #fff;
+        color: var(--ink);
+      }
+      textarea {
+        resize: vertical;
+      }
+      #findings {
+        min-height: 190px;
+      }
+      .section-block textarea {
+        min-height: 92px;
+      }
+      button {
+        width: auto;
+        cursor: pointer;
+        background: #eef2f6;
+      }
+      button.primary {
+        background: #12507e;
+        border-color: #12507e;
+        color: #fff;
+        font-weight: 600;
+      }
+      button.sign {
+        background: #1d6b3f;
+        border-color: #1d6b3f;
+        color: #fff;
+        font-weight: 600;
+      }
+      button:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 12px;
+      }
+      .prior {
+        border: 1px dashed var(--line);
+        border-radius: 4px;
+        padding: 8px;
+        margin-top: 8px;
+      }
+      .prior label {
+        margin-top: 0;
+      }
+      .quality {
+        font-size: 14px;
+      }
+      .finding {
+        border-left: 3px solid var(--muted);
+        padding: 6px 0 6px 9px;
+        margin: 0 0 8px;
+      }
+      .finding.block {
+        border-left-color: var(--block);
+      }
+      .finding.advisory {
+        border-left-color: var(--advisory);
+      }
+      .finding .tag {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+      .finding .quoted {
+        font-style: italic;
+        color: var(--muted);
+      }
+      .status-clear {
+        color: var(--clear);
+        font-weight: 600;
+      }
+      .status-advisory {
+        color: var(--advisory);
+        font-weight: 600;
+      }
+      .status-blocking {
+        color: var(--block);
+        font-weight: 600;
+      }
+      .basis,
+      .scope,
+      .note {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .reasons {
+        margin: 6px 0 0;
+        padding-left: 18px;
+        font-size: 13px;
+      }
+      dl {
+        margin: 0;
+        font-size: 13px;
+      }
+      dt {
+        color: var(--muted);
+        float: left;
+        clear: left;
+        width: 118px;
+      }
+      dd {
+        margin: 0 0 3px 122px;
+      }
+      #error {
+        display: none;
+        margin-top: 12px;
+        padding: 9px 11px;
+        border: 1px solid var(--block);
+        border-radius: 4px;
+        color: var(--block);
+        font-size: 14px;
+        white-space: pre-wrap;
+      }
+      .section-name {
+        font-size: 12px;
+        font-weight: 650;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+      .section-block {
+        margin-bottom: 12px;
+      }
+      #indicator {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Radiology Copilot</h1>
+      <span class="state" id="service">MRI brain · skill radiology-report</span>
+      <span class="banner" id="banner">DRAFT — NOT SIGNED. Not for clinical use.</span>
+    </header>
+
+    <main>
+      <!-- ------------------------------------------------ submitted inputs -->
+      <section>
+        <h2>Study</h2>
+        <label for="study">Exam</label>
+        <input id="study" value="MRI BRAIN WITH AND WITHOUT CONTRAST" />
+        <label for="modality">Modality</label>
+        <input id="modality" value="MRI" />
+        <label for="indication">Clinical indication (the referrer's words)</label>
+        <textarea id="indication" rows="3">45-year-old, chronic headache, no neurological deficit</textarea>
+        <label for="technique">Technique — leave blank if not stated</label>
+        <textarea id="technique" rows="2">MRI brain with and without intravenous contrast; axial T2, FLAIR, DWI and post-contrast T1 sequences.</textarea>
+
+        <h2 style="margin-top: 18px">Dictation</h2>
+        <label for="findings">What you saw</label>
+        <textarea id="findings">Normal grey-white matter. No mass, no abnormal enhancement. Normal ventricular size and morphology. No white matter lesions. Pituitary normal. No sinus disease. Hippocampi, brainstem and cerebellum normal. No midline shift.</textarea>
+        <p class="note">Every number in the report must come from here or from a previous report below.</p>
+
+        <h2 style="margin-top: 18px">Previous reports (optional)</h2>
+        <div id="priors"></div>
+        <div class="row">
+          <button type="button" id="add-prior">Add a previous report</button>
+        </div>
+
+        <div class="row">
+          <button type="button" class="primary" id="draft">Draft the report</button>
+          <button type="button" id="redraft">Redraft with a note</button>
+          <input id="focus" placeholder="e.g. comment on the posterior fossa" />
+        </div>
+        <p id="error"></p>
+      </section>
+
+      <!-- ------------------------------------------------------------ draft -->
+      <section>
+        <h2>Structured report</h2>
+        <div id="sections">
+          <p class="note">Nothing drafted yet.</p>
+        </div>
+        <div class="row">
+          <span class="section-name" id="indicator"></span>
+        </div>
+        <div class="row">
+          <label for="clinician" style="margin: 0; width: auto">Signing radiologist</label>
+          <input id="clinician" placeholder="Name as it appears on the report" style="width: 280px" />
+        </div>
+        <div class="row">
+          <button type="button" class="sign" id="sign" disabled>Approve and sign</button>
+          <button type="button" id="return" disabled>Return for correction</button>
+          <select id="format" style="width: 120px">
+            <option value="text">text</option>
+            <option value="markdown">markdown</option>
+            <option value="json">json</option>
+          </select>
+          <button type="button" id="export" disabled>Export</button>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------ the checks -->
+      <section>
+        <h2>Quality</h2>
+        <p class="quality" id="quality">Checks run after a draft.</p>
+        <p class="scope" id="scope"></p>
+        <h2 style="margin-top: 18px">Confidence</h2>
+        <p class="quality" id="confidence">—</p>
+        <ul class="reasons" id="reasons"></ul>
+        <p class="basis" id="basis"></p>
+        <h2 style="margin-top: 18px">Provenance</h2>
+        <dl id="provenance"><dd>—</dd></dl>
+      </section>
+    </main>
+
+    <script>
+      "use strict";
+      // The six signed sections, in the order the document carries them. Kept as one
+      // list because the review screen, the export and the parser must never disagree
+      // about what a report contains — the same rule `report.py::SECTION_KEYS` holds
+      // in Python, and this page is a second reader of that contract, not a new one.
+      const SECTIONS = [
+        ["clinical_indication", "Clinical indication", false],
+        ["technique", "Technique", false],
+        ["findings", "Findings", true],
+        ["impression", "Impression", true],
+        ["recommendations", "Recommendations", true],
+        ["follow_up", "Follow-up", true],
+      ];
+      let report = null;
+      let checking = 0;
+
+      const value = (id) => document.getElementById(id).value.trim();
+      const show = (id, text) => {
+        document.getElementById(id).textContent = text;
+      };
+
+      function failure(body) {
+        const error = body && body.error ? body.error : null;
+        if (!error) return JSON.stringify(body, null, 2);
+        const blocked = (error.details && error.details.blocking) || [];
+        const names = blocked.map((b) => `${b.check}${b.section ? ` (${b.section})` : ""}`);
+        return (
+          error.message +
+          (names.length ? "\n\nChecks that refused it:\n- " + names.join("\n- ") : "") +
+          (error.request_id ? `\n\nGateway request id: ${error.request_id}` : "")
+        );
+      }
+
+      async function post(path, payload) {
+        const response = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(failure(body));
+        return body;
+      }
+
+      function currentSubmission() {
+        const submission = {
+          clinical_indication: value("indication"),
+          modality: value("modality"),
+          study: value("study"),
+          findings: value("findings"),
+          previous_reports: priorRows().map((row) => ({
+            reported_on: row.reported_on,
+            modality: row.modality,
+            study: row.study,
+            report: row.report,
+          })),
+        };
+        if (value("technique")) submission.technique = value("technique");
+        return submission;
+      }
+
+      function priorRows() {
+        return [...document.querySelectorAll("#priors .prior")]
+          .map((row) => ({
+            reported_on: row.querySelector("[data-field=reported_on]").value.trim(),
+            modality: row.querySelector("[data-field=modality]").value.trim(),
+            study: row.querySelector("[data-field=study]").value.trim(),
+            report: row.querySelector("[data-field=report]").value.trim(),
+          }))
+          .filter((prior) => prior.reported_on && prior.modality && prior.study && prior.report);
+      }
+
+      function addPrior() {
+        const row = document.createElement("div");
+        row.className = "prior";
+        row.innerHTML = `
+          <label>Reported</label>
+          <input data-field="reported_on" placeholder="2024-06-11, or 4 months ago" />
+          <label>Modality and exam</label>
+          <input data-field="modality" placeholder="MRI" size="6" />
+          <input data-field="study" placeholder="MRI BRAIN WITH CONTRAST" />
+          <label>That report</label>
+          <textarea data-field="report" rows="3" placeholder="Its findings and impression, as signed"></textarea>`;
+        document.getElementById("priors").appendChild(row);
+      }
+
+      function renderSections() {
+        const host = document.getElementById("sections");
+        host.innerHTML = "";
+        for (const [key, label, editable] of SECTIONS) {
+          const block = document.createElement("div");
+          block.className = "section-block";
+          block.innerHTML = `<label for="sec-${key}">${label}</label>`;
+          const box = document.createElement("textarea");
+          box.id = `sec-${key}`;
+          box.value = report[key] || "";
+          box.readOnly = !editable;
+          // An edited section re-runs the checks: the verdict must describe the words
+          // on the screen, not the ones the model first returned.
+          box.addEventListener("input", queueCheck);
+          block.appendChild(box);
+          host.appendChild(block);
+        }
+      }
+
+      function editedSections() {
+        if (!report) return {};
+        const edits = {};
+        for (const [key, , editable] of SECTIONS) {
+          if (!editable) continue;
+          const box = document.getElementById(`sec-${key}`);
+          if (box && box.value.trim() !== (report[key] || "").trim()) {
+            edits[key] = box.value.trim();
+          }
+        }
+        return edits;
+      }
+
+      function renderChecks() {
+        const quality = report.quality;
+        const host = document.getElementById("quality");
+        host.className = `quality status-${quality.status}`;
+        const headline =
+          quality.status === "clear"
+            ? `Quality: no issues raised (${quality.checks_run.length} checks)`
+            : `Quality: ${quality.findings.length} finding(s) — ${quality.status}`;
+        host.innerHTML =
+          `<div>${escapeHtml(headline)}</div>` +
+          quality.findings
+            .map(
+              (f) =>
+                `<div class="finding ${escapeHtml(f.severity)}">
+                   <div class="tag">${escapeHtml(f.severity)}${f.section ? ` · ${escapeHtml(f.section)}` : ""} · ${escapeHtml(f.check)}</div>
+                   <div>${escapeHtml(f.message)}</div>
+                   ${f.evidence ? `<div class="quoted">quoted: ${escapeHtml(f.evidence)}</div>` : ""}
+                 </div>`
+            )
+            .join("");
+        show("scope", quality.scope);
+
+        const confidence = report.confidence;
+        const level = document.getElementById("confidence");
+        // Confidence and quality share one colour language, so a reviewer reads the
+        // right-hand column the same way twice rather than learning a second scale.
+        const tone =
+          confidence.level === "supported"
+            ? "clear"
+            : confidence.level === "review-carefully"
+              ? "advisory"
+              : "blocking";
+        level.className = `quality status-${tone}`;
+        level.textContent = `${confidence.level} — ${confidence.label}`;
+        show("basis", confidence.basis);
+        document.getElementById("reasons").innerHTML = confidence.reasons
+          .map((reason) => `<li>${escapeHtml(reason)}</li>`)
+          .join("");
+
+        document.getElementById("provenance").innerHTML = [
+          ["Model", report.model_provenance.model],
+          ["Provider", report.model_provenance.provider],
+          ["Selected by", report.model_provenance.selected_by],
+          ["Attempts", String(report.model_provenance.attempts)],
+          ["Degraded", report.model_provenance.degraded ? "YES" : "no"],
+          ["Latency", `${report.model_provenance.latency_ms} ms`],
+          ["Request id", report.model_provenance.request_id],
+          ["Prompt", report.metadata.prompt_version],
+          ["Profile", report.metadata.profile || "none"],
+          ["Compared with", report.metadata.compared_with.join("; ") || "no priors"],
+          ["Drafted", report.metadata.drafted_at],
+        ]
+          .map(([name, detail]) => `<dt>${name}</dt><dd>${escapeHtml(detail)}</dd>`)
+          .join("");
+
+        const blocked = quality.status === "blocking";
+        document.getElementById("sign").disabled = blocked;
+        document.getElementById("banner").textContent = report.metadata.review.state === "signed"
+          ? `SIGNED — ${report.metadata.review.clinician}`
+          : blocked
+            ? "QUALITY BLOCK — correct the flagged statements before signing"
+            : "DRAFT — NOT SIGNED. Not for clinical use.";
+        document.getElementById("banner").style.color =
+          report.metadata.review.state === "signed" ? "var(--clear)" : "var(--block)";
+      }
+
+      function escapeHtml(text) {
+        return String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+      }
+
+      function queueCheck() {
+        show("indicator", "checking…");
+        if (checking) clearTimeout(checking);
+        // Debounced: a keystroke must not become a request per character, and the
+        // checks are cheap enough that waiting 400 ms is invisible to the reviewer.
+        checking = setTimeout(runCheck, 400);
+      }
+
+      async function runCheck() {
+        if (!report) return;
+        const edits = editedSections();
+        const merged = { ...report, ...edits };
+        try {
+          report = await post("/check", { report: merged, submission: currentSubmission() });
+          renderChecks();
+          show("indicator", Object.keys(edits).length ? `edited: ${Object.keys(edits).join(", ")}` : "");
+        } catch (error) {
+          show("error", error.message);
+          document.getElementById("error").style.display = "block";
+        }
+      }
+
+      function download(name, content) {
+        const url = URL.createObjectURL(new Blob([content], { type: "text/plain" }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = name;
+        link.click();
+        // Revoke on the next tick: the draft text exists only in this browser, so the
+        // object URL is a second copy of it and must not outlive the download.
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+
+      async function draftWith(extra) {
+        document.getElementById("error").style.display = "none";
+        try {
+          report = await post("/draft", {
+            submission: currentSubmission(),
+            ...(extra ? { extra_instructions: extra } : {}),
+          });
+          renderSections();
+          renderChecks();
+          document.getElementById("return").disabled = false;
+          document.getElementById("export").disabled = false;
+          show("indicator", "");
+        } catch (error) {
+          report = null;
+          document.getElementById("error").textContent = error.message;
+          document.getElementById("error").style.display = "block";
+        }
+      }
+
+      document.getElementById("draft").addEventListener("click", () => draftWith(null));
+
+      document.getElementById("redraft").addEventListener("click", () => {
+        const note = value("focus");
+        if (!note) {
+          document.getElementById("error").textContent =
+            "Write what to change, then redraft.";
+          document.getElementById("error").style.display = "block";
+          return;
+        }
+        // The note joins the system turn server-side. It is the only steering this page
+        // offers, and it cannot name a model, a provider or a policy — which is why no
+        // other control here reaches the deployment.
+        draftWith({ reviewer_note: note });
+      });
+
+      document.getElementById("sign").addEventListener("click", async () => {
+        const clinician = value("clinician");
+        if (!clinician) {
+          document.getElementById("error").textContent = "Type your name before signing.";
+          document.getElementById("error").style.display = "block";
+          return;
+        }
+        try {
+          report = await post("/review", {
+            report: { ...report, ...editedSections() },
+            decision: "signed",
+            clinician,
+            submission: currentSubmission(),
+          });
+          renderSections();
+          renderChecks();
+        } catch (error) {
+          document.getElementById("error").textContent = error.message;
+          document.getElementById("error").style.display = "block";
+        }
+      });
+
+      document.getElementById("return").addEventListener("click", async () => {
+        const comment = value("focus");
+        if (!comment) {
+          document.getElementById("error").textContent =
+            "Say what is wrong, or the next draft repeats the same mistake.";
+          document.getElementById("error").style.display = "block";
+          return;
+        }
+        try {
+          report = await post("/review", {
+            report: { ...report, ...editedSections() },
+            decision: "returned_for_correction",
+            clinician: value("clinician") || "reporting radiologist",
+            comment,
+            submission: currentSubmission(),
+          });
+          renderChecks();
+        } catch (error) {
+          document.getElementById("error").textContent = error.message;
+          document.getElementById("error").style.display = "block";
+        }
+      });
+
+      document.getElementById("export").addEventListener("click", async () => {
+        try {
+          const result = await post("/export", {
+            report: { ...report, ...editedSections() },
+            format: value("format"),
+          });
+          download(result.filename, result.content);
+        } catch (error) {
+          document.getElementById("error").textContent = error.message;
+          document.getElementById("error").style.display = "block";
+        }
+      });
+
+      document.getElementById("add-prior").addEventListener("click", addPrior);
+
+      fetch("/health")
+        .then((response) => response.json())
+        .then((health) => {
+          show("service", `${health.skill} · copilot ${health.version} · Gateway ${health.gateway.gateway_base_url}`);
+          if (!health.gateway.gateway_api_key_configured) {
+            document.getElementById("error").textContent =
+              "No Gateway credential is configured on this service, so drafting will be refused.";
+            document.getElementById("error").style.display = "block";
+          }
+        })
+        .catch(() => show("indicator", "the copilot service is not reachable"));
+    </script>
+  </body>
+</html>

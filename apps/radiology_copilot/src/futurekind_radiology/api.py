@@ -1,9 +1,14 @@
-"""The application's own HTTP surface: three operations, one document.
+"""The application's own HTTP surface: four operations, one document.
 
-``POST /draft`` → ``POST /review`` → ``POST /export`` is the workflow a
-radiology department runs, in the order the clinician works through it. The
-report travels *through* the caller in each request rather than being stored
-here: the application is stateless by design, and the EHR is the record.
+``POST /draft`` → edit → ``POST /check`` → ``POST /review`` → ``POST /export`` is
+the workflow a radiology department runs, in the order the clinician works through
+it. The report travels *through* the caller in each request rather than being
+stored here: the application is stateless by design, and the EHR is the record.
+
+``GET /`` serves the reporting screen — the same process, no second service, no
+build step — because "open the copilot, paste the findings, review it, approve it,
+export it" is the product, and a workflow that needs curl is a workflow for the
+developer who wrote it.
 
 Trust model, stated plainly because it is unfinished work: these endpoints
 authenticate nobody. The Gateway authenticates *this* application (its key never
@@ -15,11 +20,12 @@ the hospital's own authentication, not in front of it.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from . import SKILL_NAME, __version__
@@ -29,6 +35,11 @@ from .gateway import GatewayClient
 from .report import RadiologyReport
 from .settings import CopilotSettings
 from .submission import StudySubmission
+
+#: The screen. Shipped inside the package, served as one static file: it calls the
+#: same four endpoints a client would, and holds the draft in the browser only —
+#: there is no session, no store and no second copy of the patient anywhere.
+_SCREEN = Path(__file__).parent / "static" / "index.html"
 
 
 class DraftRequest(BaseModel):
@@ -43,6 +54,19 @@ class DraftRequest(BaseModel):
         '{"focus": "comment on the posterior fossa"}. They join the system turn and '
         "cannot name a model, a provider or a policy.",
     )
+
+
+class CheckRequest(BaseModel):
+    """The draft as it stands on the screen, plus what produced it.
+
+    The submission comes back with every check because the checks are comparisons:
+    without the dictated text there is nothing to measure a measurement against.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    report: RadiologyReport
+    submission: StudySubmission
 
 
 class ReviewRequest(BaseModel):
@@ -60,8 +84,14 @@ class ReviewRequest(BaseModel):
     comment: str | None = Field(default=None, max_length=4_000)
     amendments: dict[str, str] | None = Field(
         default=None,
-        description="Section name to replacement text. Only the five report sections are "
+        description="Section name to replacement text. Only the six report sections are "
         "amendable; anything else is refused rather than filed as an unnamed note.",
+    )
+    submission: StudySubmission | None = Field(
+        default=None,
+        description="Required to sign. The quality checks re-run on the text being signed, "
+        "and they can only do that against the submission that produced it. Optional for "
+        "`returned_for_correction`, which creates no attestation.",
     )
 
 
@@ -75,16 +105,19 @@ class ExportRequest(BaseModel):
 
 
 DESCRIPTION = """The first clinical application on FutureKind: a radiology reporting
-copilot for one skill, `radiology-report`.
+copilot for one skill, `radiology-report`, running one complete workflow — MRI brain.
 
-A clinician submits an indication, a modality and their findings. This application
-asks the Gateway for a structured draft — it never names a model, a provider or an
-endpoint — refuses any answer that is not a complete report, holds it for a named
-radiologist to review and amend, and exports only what a human has signed.
+A clinician submits an indication, a modality, the dictated observations and any
+previous reports. This application asks the Gateway for a structured draft — it
+never names a model, a provider or an endpoint — refuses any answer that is not a
+complete report, checks the draft against what was submitted, holds it for a named
+radiologist to edit and approve, and exports only what a human has signed.
 
-The nine things it returns are the five clinical sections plus `metadata`,
-`model_provenance`, `skill` and `policy`: the medicine, and the record of how it
-was produced and under what governance."""
+The twelve things a draft returns are the six clinical sections (indication,
+technique, findings, impression, recommendations, follow-up), the `quality` pass and
+the computed `confidence`, plus `metadata`, `model_provenance`, `skill` and
+`policy`: the medicine, the checks over it, and the record of how it was produced
+and under what governance."""
 
 
 def create_app(copilot: RadiologyCopilot, *, settings: CopilotSettings | None = None) -> FastAPI:
@@ -144,6 +177,27 @@ def create_app(copilot: RadiologyCopilot, *, settings: CopilotSettings | None = 
             "gateway": resolved.redacted(),
         }
 
+    @app.get("/", include_in_schema=False, response_class=HTMLResponse)
+    async def screen() -> HTMLResponse:
+        """The reporting screen: one file, served from this process.
+
+        No cache, because the page holds a draft in the browser and a stale copy
+        on a shared department workstation is how one patient's report gets read
+        under another's name.
+        """
+        if not _SCREEN.is_file():
+            # A missing screen is a broken installation, not a reason to refuse the
+            # API: the four endpoints still work for a client that has its own UI.
+            return HTMLResponse(
+                "<h1>Radiology Copilot</h1><p>The reporting screen is not installed "
+                "in this build. The API endpoints are unaffected.</p>",
+                status_code=200,
+            )
+        return HTMLResponse(
+            _SCREEN.read_text(encoding="utf-8"),
+            headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        )
+
     @app.post(
         "/draft",
         response_model=RadiologyReport,
@@ -151,11 +205,14 @@ def create_app(copilot: RadiologyCopilot, *, settings: CopilotSettings | None = 
         summary="Draft a structured report for one study",
         description=(
             "Sends the submission to the Gateway under skill `radiology-report` and "
-            "returns the nine-part report. Nothing here chooses infrastructure: the "
+            "returns the twelve-part report. Nothing here chooses infrastructure: the "
             "request the Gateway receives names only the skill.\n\n"
             "A prose answer, a missing section or a truncated report is a `502`, not a "
             "half-written document. An answer that arrived under the wrong policy is a "
-            "`503`."
+            "`503`.\n\n"
+            "A draft that fails a quality check **is** returned, with the finding on it. "
+            "Withholding it would leave the clinician with an empty screen and nothing to "
+            "correct; what it cannot do is be signed until the wording is fixed."
         ),
         responses={
             422: {"description": "The body does not fit this endpoint, in the platform envelope."},
@@ -169,6 +226,25 @@ def create_app(copilot: RadiologyCopilot, *, settings: CopilotSettings | None = 
         )
 
     @app.post(
+        "/check",
+        response_model=RadiologyReport,
+        tags=["workflow"],
+        summary="Re-run the quality checks over the draft as it now stands",
+        description=(
+            "What the screen calls while the radiologist edits, and what signing calls "
+            "before it accepts a name. Only `quality` and `confidence` change: the sections, "
+            "the provenance and the review state are returned untouched, so checking a draft "
+            "cannot alter what it says.\n\n"
+            "Deterministic and free — no Gateway request, no model, no tokens. The same text "
+            "gives the same findings every time, which is the property that makes a quality "
+            "verdict auditable after the fact."
+        ),
+        responses={422: {"description": "The report or the submission does not fit."}},
+    )
+    async def check(payload: CheckRequest) -> RadiologyReport:
+        return copilot.check(payload.report, payload.submission)
+
+    @app.post(
         "/review",
         response_model=RadiologyReport,
         tags=["workflow"],
@@ -178,9 +254,19 @@ def create_app(copilot: RadiologyCopilot, *, settings: CopilotSettings | None = 
             "comment that says what is wrong.\n\n"
             "Amending does not lock the document: a signed report can be reviewed and "
             "re-exported, and the model's authorship stays in `model_provenance` while "
-            "`metadata.review.amendments` names the sections a human rewrote."
+            "`metadata.review.amendments` names the sections a human rewrote.\n\n"
+            "The checks run again on the text being signed. A blocking finding refuses the "
+            "signature with `422` — the check names and section list are returned, never the "
+            "clinical text, because a refusal is the artefact most likely to end up in a log."
         ),
-        responses={422: {"description": "No clinician named, or an unknown section amended."}},
+        responses={
+            422: {
+                "description": (
+                    "No clinician named, an unknown section amended, no submission supplied "
+                    "for a signature, or a blocking quality finding remains."
+                )
+            }
+        },
     )
     async def review(payload: ReviewRequest) -> RadiologyReport:
         return copilot.review(
@@ -189,6 +275,7 @@ def create_app(copilot: RadiologyCopilot, *, settings: CopilotSettings | None = 
             clinician=payload.clinician,
             comment=payload.comment,
             amendments=payload.amendments,
+            submission=payload.submission,
         )
 
     @app.post(
@@ -221,4 +308,11 @@ def build_app(settings: CopilotSettings | None = None) -> FastAPI:
     return create_app(RadiologyCopilot(gateway), settings=resolved)
 
 
-__all__ = ["ExportRequest", "DraftRequest", "ReviewRequest", "build_app", "create_app"]
+__all__ = [
+    "CheckRequest",
+    "DraftRequest",
+    "ExportRequest",
+    "ReviewRequest",
+    "build_app",
+    "create_app",
+]
