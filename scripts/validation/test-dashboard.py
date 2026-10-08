@@ -70,6 +70,47 @@ def session(tmp_path: Path) -> dashboard.Session:
     instance.redrafts = collections.Counter()
     instance.lock = threading.Lock()
     instance.skill = ""
+    instance.started_at = 1_790_000_000.0
+    return instance
+
+
+def session_with(*studies: tuple[str, dict, bool]) -> dashboard.Session:
+    """Several closed studies in one session, for the readings that need a population."""
+    import collections
+    import threading
+
+    instance = object.__new__(dashboard.Session)
+    instance.cases = []
+    instance.clinician = "Dr A. Nair"
+    instance.gateway_log = None
+    instance.keep_phrases = False
+    instance.out_dir = Path("/tmp")
+    instance.rows, instance.phrases = [], []
+    instance.drafts, instance.meta, instance.opened = {}, {}, {}
+    instance.redrafts = collections.Counter()
+    instance.lock = threading.Lock()
+    instance.skill = "radiology-report"
+    instance.started_at = 1_790_000_000.0
+    for case_id, after, approved in studies:
+        instance.drafts[case_id] = {
+            "quality": {"findings": []},
+            "confidence": {"level": "supported"},
+            "model_provenance": {"model": "ollama/qwen3:14b"},
+            **DRAFT,
+        }
+        instance.meta[case_id] = {"generation_seconds": 2.0, "alias": "fk-reasoning",
+                                  "gateway_latency_ms": 20, "request_id": None}
+        instance._append_log = lambda row: None
+        instance.rows.append(
+            instance.close_study(
+                case_id,
+                {key: after.get(key, "") for key in SECTIONS},
+                120.0,
+                0.2,
+                [],
+                approved,
+            )
+        )
     return instance
 
 
@@ -286,3 +327,133 @@ def test_a_request_id_that_never_appears_is_reported_absent(tmp_path: Path) -> N
     log = tmp_path / "gateway.log"
     log.write_text("event=skill_audit request_id=other alias=fk-fast\n", encoding="utf-8")
     assert dashboard.alias_from_log(log, "abc") == ""
+
+
+# -- the word counts and the readings built from them ---------------------------------------------
+
+
+def test_the_row_carries_both_word_counts() -> None:
+    """A percentage cannot answer "how many words did I not type today", so the absolute
+    counts are recorded next to the ratio they come from."""
+    draft_words = sum(len(text.split()) for text in DRAFT.values())
+    row = close("s1", edited(findings=DRAFT["findings"] + " A new sentence here."))
+    assert row["words_in_draft"] == draft_words
+    assert row["words_signed"] == draft_words + 4
+
+
+def test_an_abandoned_study_contributes_no_signed_words() -> None:
+    row = close("s1", DRAFT, approved=False)
+    assert row["words_signed"] == 0
+    assert row["words_in_draft"] > 0
+
+
+def test_productivity_is_the_signed_words_minus_the_typed_ones() -> None:
+    """Longhand: two studies, the same draft in both, four words typed in the first and
+    nothing in the second. The machine's words that survived are the signed total less the
+    four the reviewer typed."""
+    draft_words = sum(len(text.split()) for text in DRAFT.values())
+    instance = session_with(
+        ("s1", edited(findings=DRAFT["findings"] + " A new sentence here."), True),
+        ("s2", DRAFT, True),
+    )
+    reading = dashboard.analysis(instance.rows, elapsed_seconds=600.0, clinician="Dr A. Nair")
+    productivity = reading["productivity"]
+    assert productivity["words_the_model_wrote"] == 2 * draft_words
+    assert productivity["words_in_the_signed_reports"] == 2 * draft_words + 4
+    assert productivity["words_the_reviewer_typed"] == 4
+    assert productivity["words_not_typed"] == 2 * draft_words
+    assert productivity["minutes_reviewing"] == 4.0  # 2 x 120s review + 2 x 0.2s approval
+    assert productivity["words_not_typed_per_minute_reviewing"] == round(
+        (2 * draft_words) / 4.0, 1
+    )
+
+
+def test_the_trust_reading_groups_by_the_badge_that_was_actually_shown() -> None:
+    instance = session_with(("s1", DRAFT, True), ("s2", DRAFT, True))
+    for row in instance.rows:
+        row["confidence_before_approval"] = "review-carefully"
+    reading = dashboard.analysis(instance.rows, elapsed_seconds=120.0, clinician="Dr A. Nair")
+    group = reading["trust_analysis"]["by_confidence_level"]["review-carefully"]
+    assert group == {
+        "studies": 2,
+        "signed": 2,
+        "mean_edit_distance": 0.0,
+        "mean_review_seconds": 120.0,
+        "mean_words_added": 0.0,
+    }
+    assert "supported" not in reading["trust_analysis"]["by_confidence_level"]
+
+
+def test_abandoning_a_draft_the_badge_called_supported_is_counted_apart() -> None:
+    """The afternoon's most interesting row: the gate was satisfied and the radiologist was
+    not. It is reported separately from the abandonment count rather than folded into it."""
+    instance = session_with(("s1", DRAFT, True), ("s2", DRAFT, False))
+    reading = dashboard.analysis(instance.rows, elapsed_seconds=60.0, clinician="Dr A. Nair")
+    assert reading["acceptance_analysis"]["abandoned"] == 1
+    assert reading["acceptance_analysis"]["abandoned_after_a_supported_draft"] == 1
+
+
+def test_a_one_study_half_of_the_trend_does_not_crash() -> None:
+    """With three studies the first half is one row and the means of one row are that row.
+    With one study the first half is empty and every mean has to be None rather than a
+    division by zero at the end of a real afternoon."""
+    instance = session_with(("s1", DRAFT, True))
+    reading = dashboard.analysis(instance.rows, elapsed_seconds=30.0, clinician="Dr A. Nair")
+    assert reading["quality_trend"]["first_half"]["studies"] == 0
+    assert reading["quality_trend"]["first_half"]["mean_edit_distance"] is None
+    assert reading["quality_trend"]["second_half"]["studies"] == 1
+
+
+def test_analysis_reads_a_row_written_before_the_word_columns_existed() -> None:
+    """A resumed session directory holds `rows.jsonl` from the morning, whose rows predate
+    these columns. The instrument must read them as no words, not refuse to open."""
+    instance = session_with(("s1", DRAFT, True))
+    for row in instance.rows:
+        del row["words_in_draft"]
+        del row["words_signed"]
+    reading = dashboard.analysis(instance.rows, elapsed_seconds=10.0, clinician="Dr A. Nair")
+    assert reading["productivity"]["words_the_model_wrote"] == 0
+    assert reading["productivity"]["words_not_typed"] == 0
+
+
+def test_write_files_writes_the_analysis_and_the_report(tmp_path: Path) -> None:
+    """The report is the artefact the meeting reads, and it had no test at all: every section
+    added to it was code that only ran when somebody looked. This closes the loop."""
+    changed = edited(findings=DRAFT["findings"] + " A new sentence here.")
+    instance = session_with(("s1", changed, True))
+    instance.out_dir = tmp_path
+    written = dashboard.write_files(instance)
+    assert (tmp_path / "analysis.json").is_file()
+    assert written["analysis_json"].endswith("analysis.json")
+    report = (tmp_path / "report.md").read_text(encoding="utf-8")
+    for heading in (
+        "## Where the afternoon went",
+        "## What the reviewer did with the draft",
+        "## What the machine wrote that was kept",
+        "## Trust, read from what the reviewer did",
+        "## Across the afternoon",
+    ):
+        assert heading in report, heading
+    assert "words the radiologist did not type" in report
+
+
+def test_a_rate_is_not_reported_off_a_session_too_short_to_have_one() -> None:
+    instance = session_with(("s1", DRAFT, True))
+    reading = dashboard.analysis(instance.rows, elapsed_seconds=30.0, clinician="Dr A. Nair")
+    assert reading["session_summary"]["studies_per_hour"] is None
+    long_afternoon = dashboard.analysis(
+        instance.rows, elapsed_seconds=3600.0, clinician="Dr A. Nair"
+    )
+    assert long_afternoon["session_summary"]["studies_per_hour"] == 1.0
+
+
+def test_review_time_that_exceeds_the_wall_clock_says_so_out_loud() -> None:
+    """`review_seconds` is reported by the screen and the room clock is measured here, so a
+    script can claim four minutes of review inside ten seconds of wall clock. The instrument
+    that prints "0.3 minutes in the room, 4.9 on the keyboard" without comment is the
+    instrument that would quietly believe a fabricated afternoon."""
+    instance = session_with(("s1", DRAFT, True))
+    reading = dashboard.analysis(instance.rows, elapsed_seconds=10.0, clinician="Dr A. Nair")
+    assert "exceeds the wall clock" in reading["session_summary"]["consistency_warning"]
+    honest = dashboard.analysis(instance.rows, elapsed_seconds=3600.0, clinician="Dr A. Nair")
+    assert honest["session_summary"]["consistency_warning"] == ""
