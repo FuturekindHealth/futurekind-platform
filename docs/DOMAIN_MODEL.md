@@ -22,9 +22,9 @@ FutureKind has, today, two vocabularies that have never been reconciled:
   Model, Approval, Audit* — which exists only in `core/gateway/` and the two
   architecture notes derived from it.
 
-The two do not overlap by a single term. `docs/ARCHITECTURE.md` contains **zero**
-occurrences of Provider, Skill, Capability, Alias, Policy, Approval, Workflow,
-Report, Knowledge, Tool, Agent, Backend or Tenant. It says *Model Router*
+The two do not overlap by a clinical term. `docs/ARCHITECTURE.md` has no occurrence of
+Provider, Skill, Capability, Alias, Workflow, Knowledge, Tool, Agent, Backend or Tenant —
+and one each of Policy, Approval and Report. It says *Model Router*
 (`:150`) and *LLM* (`:154`) where the Gateway says *Provider* and *Model*. The
 platform's own top-level document does not speak the language its most
 governance-heavy component enforces.
@@ -226,9 +226,9 @@ retry" is answered.
 (`ARCHITECTURE.md:104`), and it must never learn a **Skill** name
 (`gateway-routing.md`, "Forbidden").
 **Lifecycle.** A container (`compose.yaml:54` `fk-litellm`) started from
-`configs/litellm/config.yaml`. Not yet integrated: `services/ai/litellm/` exists
-as an empty directory, so the path cited by `gateway-routing.md:26` names a place
-with nothing in it.
+`configs/litellm/config.yaml`. Not yet integrated: the path cited by
+`gateway-routing.md:26` — `services/ai/litellm/` — names no directory in this
+repository, because there is no `services/` tree at all.
 **Relationships.** Resolves **Alias** → **Model** + **Provider**; is the only
 **Provider** the Gateway should implement against.
 **Banned synonyms.** "Model Router" (`ARCHITECTURE.md:150`) — that is a hop
@@ -523,7 +523,7 @@ words, never interchangeable. See R4 and Q5.
 reason from — guidelines, prior reports, protocol documents.
 **Purpose.** To ground statements instead of inventing them.
 **Owner.** FutureKind Services (`services/knowledge/crawl4ai`,
-`services/knowledge/searxng`, `services/vector/qdrant` exist as empty dirs), with
+`services/vector/qdrant` are named here and exist nowhere — the tree has no `services/`),
 the Hospital as the authority on *what is adopted*.
 **Public / internal.** Neither today: it has no interface. `Open WebUI`
 (`configs/futurekind.yaml:44`) is called `interface`, which conflates a human UI
@@ -536,7 +536,7 @@ concept.
 a **Tool** retrieves from it.
 **Evidence.** One occurrence in the repository: the heading "Clinical knowledge layer"
 in the 2026-10-07 engineering audit (an internal working paper, not published here).
-*Corpus*, *memory* and *grounding* have no occurrence at all.
+*Corpus* and *memory* have no occurrence; *grounding* is a shipped copilot field.
 **Rule to adopt.** Knowledge is the *content*; Qdrant/SearXNG/Crawl4AI are
 *providers of access* to it. Never call a vector store "the knowledge".
 
@@ -1168,7 +1168,7 @@ it named, which was deleted rather than left empty (R10). `README-FIRST-DEPLOY.m
 was rebuilt earlier in the same pass.
 
 **R10 — Empty directories must either earn a name or go.**
-`core/{audit,auth,cli,config,notifications,sdk}` and all of `services/*` exist as
+`core/{audit,auth,cli,config,notifications,sdk}` and all of `services/*` were
 empty dirs — and those names are the only place the platform states what those
 components will be. Decision: keep `services/ai/litellm` and
 `services/knowledge/*` (they name a real ADR-0002 plan), and make the directory
@@ -1202,9 +1202,9 @@ R9. Rewrite `ARCHITECTURE.md`'s chain to the canonical one:
 `Application → Gateway → LiteLLM → Provider → Model`, matching ADR-0002 and
 `gateway-routing.md:18`, and state once, in that file, that LiteLLM's
 `model_name` *is* what this document calls an Alias.
-*Verify:* `grep -rn "Model Router\|Cloud AI providers" docs/` returns only
-historical ADR text; the two architecture docs and `ARCHITECTURE.md` agree on the
-chain; tests untouched and still 380.
+*Verify:* `grep -rn "Model Router\|Cloud AI providers" docs/` still finds
+`ARCHITECTURE.md:150`, so R2 and R3 are recorded as open, not applied. The
+sweep that closes them is M1 above. Tests untouched and not re-counted here.
 *Must not change:* the accepted decision text of ADR-0002 (it is a record, not a
 draft — corrections belong in a new ADR or an amendment note).
 
