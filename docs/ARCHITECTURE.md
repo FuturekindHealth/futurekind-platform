@@ -1,5 +1,5 @@
 # FutureKind Architecture
-Version: 0.1.0 Genesis
+Release line: Genesis. Which boxes are built is at the end, under "What this document is".
 
 ---
 
@@ -238,3 +238,33 @@ Human Wisdom.
 AI Precision.
 
 Open Healthcare.
+
+---
+
+# What this document is
+
+A target architecture, written before most of it existed. Read it with the inventory
+below, because a diagram of a platform is not a description of a deployment, and this
+repository has been reviewed against both readings. It sits at the end of the file on
+purpose: an earlier release pass inserted it here at the top and silently invalidated
+every `ARCHITECTURE.md:<line>` citation in the documents that point into this one —
+which is exactly the class of defect `docs/DOMAIN_MODEL.md` says a citation is meant
+to prevent. `scripts/doctor/check-citations.py` now catches that.
+
+| Box in this document | Status on 2026-10-08 |
+| --- | --- |
+| FutureKind Gateway (`core/gateway/`) | **Built and tested** — 492 tests: catalogue, policy, routing, LiteLLM transport, OpenAI-compatible door, logs and metrics |
+| Radiology Copilot (`apps/radiology_copilot/`) | **Built and tested** — 229 tests: draft, grounding checks, review, sign, export; 6 over real sockets. In no compose file yet |
+| LiteLLM, PostgreSQL, Redis, Qdrant, Open WebUI | **Defined in `compose.yaml`**, which is the only compose tree; not started on any host from this repository, because no container daemon was available during development, so the deployment path is validated by parsing and by `docker compose config` in CI rather than by booting |
+| Audit | **Emitted, not retained.** `skill_audit` log lines exist; no storage is configured. Register row 4, and the reason Beta has a gate |
+| Authentication, Authorization, Permissions, Notifications, Secrets, SDK, CLI | **Not built.** `core/{auth,audit,cli,config,notifications,sdk}` held no files and are removed from the working tree; the Gateway's only credential is a shared API key (ADR-0004 pending) |
+| Langfuse, SearXNG, Crawl4AI, Prometheus, Grafana, OpenTelemetry | **Not deployed and not configured.** `configs/futurekind.yaml` marks each `planned`; nothing reads those keys yet |
+
+Version numbers are not declared here either: each package carries its own in its
+`__init__.py`, which is the number `[tool.hatch.version]` builds, `GET /health`
+reports and the served OpenAPI document publishes. The git tag is the platform
+version. A copy of a number in a prose document is a second place to be wrong.
+
+The rules in this document still bind the code that exists: one AI boundary, no model
+or provider selection from a caller, no prompt text in a log. A box that is absent is
+unbuilt, not permitted.

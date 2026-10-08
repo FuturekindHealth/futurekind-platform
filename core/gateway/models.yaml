@@ -1,19 +1,166 @@
+# FutureKind Gateway routing table and skill policy. One source of truth
+# (docs/ARCHITECTURE.md, docs/architecture/gateway-policy.md).
+#
+# Three namespaces, in the order an application's request travels through them:
+#
+#   skills     what the application is doing, and how it is governed  -> application-facing
+#   models     which capability serves it, under which alias          -> Gateway-internal
+#   provider   where the request goes next                            -> Gateway-internal
+#
+# A skill declares its clinical risk and its approval, audit and downgrade rules
+# here, not in Python: a business rule that needs a code review to change is not
+# configuration. `clinical_risk` is mandatory for every skill. A high or critical
+# risk skill must state `allow_downgrade: false`, and a critical one must state
+# `approval_required: true` — the loader refuses anything else, so these comments
+# are enforced rather than advisory (docs/architecture/gateway-policy.md).
+#
+# Limits may only tighten the platform's own (FK_GATEWAY_MAX_* in config.py); a
+# skill cannot widen one. That is why `summarize-document` below narrows its token
+# ceiling rather than raising its character ceiling above 32000.
+#
+# What `provider` and `model` mean now, per docs/adr/ADR-0002-Gateway-vs-LiteLLM.md:
+#
+#   provider  the transport this Gateway invokes. `litellm` for every row, because
+#             the platform rule says no application and no Gateway reaches a model
+#             directly.
+#   alias     the one name both sides agree on, sent to LiteLLM as the OpenAI
+#             `model` field. It MUST exist as a `model_name` in
+#             configs/litellm/config.yaml — the Gateway compares the two files at
+#             startup and refuses to boot if an alias is missing (SPEC-07-03).
+#   model     what that alias resolves to behind LiteLLM, in LiteLLM's own
+#             notation. Inventory and provenance: reported to operators, audited,
+#             compared against LiteLLM's configuration at startup, and never sent.
+#             ADR-0002 step 3 deletes it from this file once the alias is the only
+#             model-facing name the Gateway holds.
+#
+# Model ids and aliases are internal: no application-facing API accepts either.
+# `GET /models` reports them to operators; `GET /v1/models` deliberately does not.
+
+skills:
+
+  platform-chat:
+
+    capability: default
+
+    description: Platform questions and non-clinical conversation. Not for patient care.
+
+    # The one skill here with no clinical consequence, so it is the skill an
+    # OpenAI-format interface can be pointed at while the clinical ones wait for
+    # their aliases to be reviewed. Still audited: "not clinical" is not a reason
+    # for a request to leave no trace.
+    clinical_risk: low
+    audit_required: true
+
+  radiology-report:
+
+    capability: reasoning
+
+    description: Draft or review a radiology impression.
+
+    # A wrong impression reaches a patient, so every request is audited and no lesser
+    # class may answer in place of the routed model.
+    clinical_risk: high
+    audit_required: true
+    allow_downgrade: false
+    max_completion_tokens: 1024
+    request_timeout_seconds: 90
+
+  pathology-review:
+
+    capability: reasoning
+
+    description: Draft or review a pathology report.
+
+    clinical_risk: high
+    audit_required: true
+    allow_downgrade: false
+    max_completion_tokens: 1024
+    request_timeout_seconds: 90
+
+  clinical-chat:
+
+    capability: default
+
+    description: General clinical conversation.
+
+    # Conversation stays downgradable: a shorter answer is still the same kind of answer.
+    clinical_risk: moderate
+    audit_required: true
+
+  summarize-document:
+
+    capability: fast
+
+    description: Condense a document the clinician supplies.
+
+    # Summarising is low consequence on its own, so it is the one skill here that is not
+    # audited line by line. Its token ceiling is tightened because a summary that runs
+    # long has already failed at what was asked.
+    clinical_risk: low
+    audit_required: false
+    max_completion_tokens: 2048
+    max_messages: 8
+
+  usg-advisory-suggestions:
+
+    capability: fast
+
+    description: Propose advisory ultrasound findings and impression text for a radiologist to accept or reject.
+
+    # Migrated in Sprint 8 from the CARE ERP's own USG assistant
+    # (`care-erp` `lib/ai/usgGatewayProvider.ts` — a documentation name for that
+    # checkout, not a path), which called a model
+    # directly and resolved its model name from `ai_provider_settings` /
+    # `ai_model_routes`. The prompt, the JSON contract and the safety funnel are
+    # unchanged and still live in the ERP; only the transport and the governance
+    # moved here.
+    #
+    # moderate, not high: nothing this skill returns reaches a patient without a
+    # radiologist accepting it, and the ERP's safety core drops any suggestion that
+    # states fetal sex (PCPNDT) before it is ever displayed. Not low: the accepted
+    # text does go into a clinical draft.
+    #
+    # allow_downgrade: false is a deliberate tightening over the old path, which
+    # would fall back to any enabled provider. A chip shown to a radiologist must be
+    # traceable to the class the clinic was promised, and P13 makes a silent
+    # substitution the thing we are least willing to accept.
+    clinical_risk: moderate
+    audit_required: true
+    allow_downgrade: false
+
+    # 1200 tokens is the ERP's own `maxTokens` for this task, carried across so the
+    # answer length does not change when the transport does.
+    max_completion_tokens: 1200
+
+    # The ERP defaulted to 300s (`AI_REQUEST_TIMEOUT_DEFAULT_SECONDS`,
+    # `lib/ai-providers/src/index.ts:49`). A chip panel must not hold a radiologist
+    # for five minutes; 120s is still four times the slowest draft in this file. This
+    # changes the worst-case ceiling, not the measured latency — see
+    # docs/integration/AI_ENTRY_POINTS_CARE_ERP.md for the before/after timings.
+    request_timeout_seconds: 120
+
 models:
 
   default:
 
-    provider: ollama
+    alias: fk-default
 
-    model: gpt-oss:20b
+    provider: litellm
+
+    model: ollama/gpt-oss:20b
 
   fast:
 
-    provider: ollama
+    alias: fk-fast
 
-    model: gemma3:12b
+    provider: litellm
+
+    model: ollama/gemma3:12b
 
   reasoning:
 
-    provider: ollama
+    alias: fk-reasoning
 
-    model: qwen3:14b
+    provider: litellm
+
+    model: ollama/qwen3:14b

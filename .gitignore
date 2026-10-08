@@ -40,3 +40,15 @@ temp/
 secrets/*
 !secrets/.gitkeep
 *.code-workspace
+
+# Internal engineering working papers.
+#
+# docs/AUDIT-*.md and docs/REVIEW-*.md are dated working documents: an inventory of
+# unpatched weaknesses in *live* hospital systems (the shared-PIN signing path, an
+# unauthenticated Orthanc API, an ungoverned AI entry point) written for the people
+# fixing them. They are not release documentation, and publishing a roadmap to a
+# system that is still exposed helps the wrong reader. They stay on the working
+# machine until the findings they list are closed, at which point the closed items
+# move into docs/security/ as ordinary threat-model history.
+docs/AUDIT-*.md
+docs/REVIEW-*.md

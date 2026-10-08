@@ -1,0 +1,13 @@
+# The build context is this directory and the image needs three things from it:
+# pyproject.toml, src/ and models.yaml. Everything else here is either test
+# scaffolding or a cache that would invalidate the layer for no reason.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+tests/

@@ -1,0 +1,279 @@
+name: CI
+
+# Both Python suites, both lints, and the release-hygiene rules the repository now
+# claims to hold. The gate exists because the review that found six unenforced
+# conventions also found that nobody was running them.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gateway:
+    name: Gateway (ruff + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: core/gateway
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff
+        run: ruff check src tests
+
+      - name: Pytest
+        # -q comes from pyproject's addopts; --strict-markers there too.
+        # The suite includes real-socket end-to-end tests over a spawned uvicorn.
+        run: pytest
+
+      - name: Import without a catalogue
+        # The Gateway must refuse, not guess, when its routing table is missing.
+        run: python -c "import futurekind_gateway.main as m; print(m.build_production_app.__name__)"
+
+  copilot:
+    name: Radiology Copilot (ruff + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/radiology_copilot
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        # One environment, two packages: the copilot's own end-to-end test imports
+        # futurekind_gateway, so a missing gateway install must fail here rather than
+        # silently skip.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ../../core/gateway -e ".[dev]"
+
+      - name: Verify the cross-package import is really available
+        run: python -c "import futurekind_gateway, yaml; print('gateway import ok')"
+
+      - name: Ruff
+        run: ruff check src tests
+
+      - name: Pytest
+        run: pytest
+
+  validate:
+    name: Configuration, compose and repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: python -m pip install PyYAML
+
+      - name: Every YAML file parses
+        run: |
+          python - <<'PY'
+          import pathlib, sys, yaml
+          bad = []
+          files = [p for p in pathlib.Path(".").rglob("*")
+                   if p.suffix in {".yaml", ".yml"} and ".git" not in p.parts]
+          for p in files:
+              try:
+                  list(yaml.safe_load_all(p.read_text(encoding="utf-8")))
+              except Exception as exc:
+                  bad.append(f"{p}: {exc}")
+          print(f"parsed {len(files)} yaml files")
+          if bad:
+              print("\n".join(bad)); sys.exit(1)
+          PY
+
+      - name: The two catalogue files agree (aliases, not by assertion)
+        # The Gateway refuses to start on drift; check the shipped pair here too so a
+        # one-file change is caught before it reaches a deployment. `models:` is keyed
+        # by capability and `skills:` by skill name, so the shapes are the loader's.
+        run: |
+          python - <<'PY'
+          import sys, yaml
+          cat = yaml.safe_load(open("core/gateway/models.yaml", encoding="utf-8"))
+          lite = yaml.safe_load(open("configs/litellm/config.yaml", encoding="utf-8"))
+          models, skills = cat["models"], cat["skills"]
+          want = {row["alias"] for row in models.values() if row.get("alias")}
+          have = {entry["model_name"] for entry in lite["model_list"]}
+          missing = sorted(want - have)
+          dangling = sorted(
+              name for name, skill in skills.items() if skill.get("capability") not in models
+          )
+          print(f"catalogue rows {len(models)}, skills {len(skills)}, aliases {len(want)}, "
+                f"litellm entries {len(have)}")
+          if missing:
+              print("ALIAS MISSING FROM LITELLM:", ", ".join(missing))
+          if dangling:
+              print("SKILL NAMES A CAPABILITY WITH NO ROW:", ", ".join(dangling))
+          if missing or dangling:
+              sys.exit(1)
+          PY
+
+      - name: Compose parses and interpolates
+        run: |
+          cp .env.example .env
+          docker compose -f compose.yaml config --quiet
+          echo "compose.yaml is valid and one authoritative tree"
+          test ! -d compose || { echo "a second compose tree reappeared"; exit 1; }
+
+      - name: The Gateway image actually builds
+        # `compose config` proves the tree; nothing else in this repository ever
+        # executes core/gateway/Dockerfile, because no Docker daemon exists in this
+        # development environment. Building it here is what makes the Dockerfile's
+        # claims testable rather than asserted: the wheel installs from the copied
+        # metadata, `futurekind-gateway` resolves as an entrypoint, and the paths it
+        # says compose will mount read-only exist at the locations the Gateway reads.
+        # Build only — no container is started, so this proves packaging, not
+        # runtime behaviour. That is proved over real sockets in the Gateway suite.
+        run: |
+          docker build -t fk-gateway-image-check core/gateway
+          docker run --rm --entrypoint python fk-gateway-image-check -c \
+            "import futurekind_gateway, pathlib; print(futurekind_gateway.__version__); assert pathlib.Path('/app/models.yaml').is_file()"
+
+      - name: The doctor script is POSIX shell
+        run: sh -n scripts/doctor/check-ai.sh
+
+      - name: No CRLF in shell scripts or Python
+        run: |
+          python - <<'PY'
+          import pathlib, sys
+          offenders = []
+          for p in pathlib.Path(".").rglob("*"):
+              if not p.is_file() or ".git" in p.parts:
+                  continue
+              if p.suffix not in {".sh", ".py"}:
+                  continue
+              if b"\r\n" in p.read_bytes():
+                  offenders.append(str(p))
+          if offenders:
+              print("CRLF found in:\n" + "\n".join(offenders)); sys.exit(1)
+          print("no CRLF in .sh or .py")
+          PY
+
+      - name: Repository hygiene — no real infrastructure identifiers
+        # The terms this repository was reviewed against, by class: LAN ranges
+        # (192.168./172.16.), the customer's site name, the directory the ERP
+        # checkout lives in (it encodes the machine), two credential-shaped
+        # placeholders that shipped in .env.example, and the marker words a
+        # half-finished file leaves behind. A match means one of them has come
+        # back into a committed file. `localhost` is not in the list on purpose:
+        # inside a container healthcheck and on the operator's own shell it is the
+        # correct address, not a deployment secret.
+        # This workflow is exempt by path: naming the patterns it forbids is the
+        # only way for it to check them, so it is scanned for everything else.
+        run: |
+          python - <<'PY'
+          import subprocess, sys
+          terms = ["192.168.", "172.16.", "caredeoghar", "care-on-synology1",
+                   "sk-futurekind", "change_me", "TODO", "FIXME", "XXX"]
+          self_path = ".github/workflows/ci.yml"
+          tracked = subprocess.run(["git", "ls-files"], capture_output=True, text=True,
+                                   check=True).stdout.split()
+          hits = []
+          for path in tracked:
+              if path == self_path:
+                  continue
+              try:
+                  text = open(path, encoding="utf-8", errors="ignore").read()
+              except OSError:
+                  continue
+              for term in terms:
+                  if term in text:
+                      hits.append(f"{path}: {term}")
+          if hits:
+              print("forbidden identifier in a tracked file:\n" + "\n".join(hits))
+              sys.exit(1)
+          print(f"checked {len(tracked) - 1} tracked files (plus this one exempted): clean")
+          PY
+
+      - name: No placeholder or empty tracked files
+        run: |
+          python - <<'PY'
+          import pathlib, subprocess, sys
+          tracked = subprocess.run(["git", "ls-files"], capture_output=True, text=True,
+                                   check=True).stdout.split()
+          empty = [p for p in tracked if pathlib.Path(p).is_file()
+                   and pathlib.Path(p).stat().st_size == 0]
+          junk = [p for p in tracked if "New Text Document" in p
+                  or pathlib.Path(p).stem.lower() in {"rffff", "er", "4h", "e", "34", "tgsw"}]
+          for label, items in (("zero-byte tracked", empty), ("placeholder", junk)):
+              if items:
+                  print(f"{label} files:\n" + "\n".join(items)); sys.exit(1)
+          print(f"checked {len(tracked)} tracked files: no empty or placeholder paths")
+          PY
+
+      - name: Relative links in documentation resolve
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+          root = pathlib.Path(".")
+          broken = []
+          checked = 0
+          for md in sorted(pathlib.Path("docs").rglob("*.md")) + sorted(root.glob("*.md")):
+              text = md.read_text(encoding="utf-8", errors="ignore")
+              for target in re.findall(r"\]\(([^)\s]+)\)", text):
+                  if target.startswith(("http://", "https://", "mailto:", "#")):
+                      continue
+                  rel = target.split("#")[0]
+                  if not rel:
+                      continue
+                  checked += 1
+                  dest = (md.parent / rel).resolve()
+                  if not dest.exists():
+                      broken.append(f"{md}: {target}")
+          print(f"resolved {checked} relative links")
+          if broken:
+              print("broken:\n" + "\n".join(broken)); sys.exit(1)
+          PY
+
+      - name: path:line citations still point at content
+        # docs/DOMAIN_MODEL.md states the convention: a citation that has drifted is a
+        # defect in the citing document. Inserting a paragraph shifts every line
+        # number below it, which a release pass does constantly and a reader never sees.
+        run: python scripts/doctor/check-citations.py
+
+      - name: The Gateway's own README cites files that exist
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+          md = pathlib.Path("core/gateway/README.md")
+          text = md.read_text(encoding="utf-8")
+          broken = []
+          for target in re.findall(r"\]\(([^)\s]+)\)", text):
+              if target.startswith(("http://", "https://", "mailto:", "#")):
+                  continue
+              dest = (md.parent / target.split("#")[0]).resolve()
+              if not dest.exists():
+                  broken.append(target)
+          if broken:
+              print("README links to paths that are not in the tree:\n" + "\n".join(broken))
+              sys.exit(1)
+          print("core/gateway/README.md links resolve")
+          PY

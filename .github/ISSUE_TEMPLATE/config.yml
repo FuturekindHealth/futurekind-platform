@@ -1,0 +1,21 @@
+# Blank issues hide the two things this repository needs separated: a bug (code
+# disagrees with the documents) and a skill proposal (a clinical intent asking to be
+# governed). Both have a template; a security report has neither and must use
+# SECURITY.md, which is why it is offered here as a link before anyone types.
+
+blank_issues_enabled: false
+
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/FuturekindHealth/futurekind-platform/security/advisories/new
+    about: >
+      Private disclosure. Use this, not an issue, for anything that exposes the
+      inventory, bypasses a skill's policy, or could reach a report or a patient.
+  - name: Security policy
+    url: https://github.com/FuturekindHealth/futurekind-platform/blob/develop/SECURITY.md
+    about: Supported versions, disclosure window, and how PHI is kept out of logs.
+  - name: Clinical doctrine and the constitution
+    url: https://github.com/FuturekindHealth/futurekind-platform/blob/develop/docs/CONSTITUTION.md
+    about: >
+      Before proposing a feature: the platform's rules, and §7, the register of where
+      this repository currently breaks them.

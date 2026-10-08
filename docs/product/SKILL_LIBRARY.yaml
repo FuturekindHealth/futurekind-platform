@@ -1,0 +1,1602 @@
+# FutureKind Healthcare Skill Library — design catalogue, 121 skills
+#
+# THE COUNT. The brief asked for 100. Designing them against the two named
+# deployments (CARE Diagnostics, Hope Neurotrauma) and the workflows already running
+# in their systems produced 120 real, non-duplicate intents, and Sprint 8 added a
+# 121st that the customer was already running. Cutting a dozen to reach a round
+# number would have thrown away reviewed work, so the count is what the work is.
+# What `status` says, measured from this file: 110 alpha, 9 beta, 2 blocked. Six
+# are authorised in code, and that is the only number that describes what the
+# platform does today — read the other 115 as decisions already taken about work
+# that has not been authorised.
+#
+# THE FINDING THAT MATTERS MORE THAN THE COUNT. Every one of the 121 runs on the three
+# capabilities that exist today — `default`, `fast`, `reasoning`. Not one needs
+# `vision`, because the product principle is that the AI drafts from what the reporting
+# clinician dictates, not from the pixels (see
+# `docs/product/RADIOLOGY_WORKFLOW.md`). A hundred-plus clinical skills is therefore a
+# configuration and review problem, not a platform capability problem: the blockers are
+# decisions (ADR-0003, ADR-0005, ADR-0006, ADR-0007), not missing infrastructure.
+#
+# THE TWENTY LEAST URGENT — a review list, not a field. Nothing in the data below
+# marks these; they carry ordinary `status` values like every other entry. They are
+# named here because each is administrative, legal or longitudinal rather than a
+# document a clinician needs today, and a reader deciding what to authorise next
+# should not have to re-derive that judgement from 121 stanzas:
+#   pcos-assessment-note, us-obstetric-growth, immunisation-catchup-plan,
+#   paediatric-growth-note, paediatric-asthma-action-plan, cervical-screening-report,
+#   haematology-bone-marrow-report, sleep-study-summary, fitness-for-duty-assessment,
+#   claim-appeal-draft, prior-authorisation-letter, de-identification-review,
+#   turnaround-time-brief, differential-diagnosis-check, survivorship-care-plan,
+#   palliative-care-plan, oncology-treatment-plan, healthcare-associated-infection-review,
+#   procedural-sedation-record, plain-language-report
+# The last is a genuine merge candidate: `patient-explainer` and `plain-language-report`
+# are one capability seen from two screens, and `DOMAIN_MODEL.md` warns twice about
+# naming one act two ways.
+#
+# WHAT THIS FILE IS. A design catalogue, not runtime configuration. The only skill
+# file the platform loads today is `core/gateway/models.yaml` (six skills), and
+# nothing here is read by any process. It exists so that a hundred-plus clinical
+# intents can be reviewed in one place, in one shape, before any of them becomes
+# configuration. When a skill is authorised, it is copied into `models.yaml` by hand
+# — one stanza, plus its alias in `configs/litellm/config.yaml`, and the Gateway's
+# startup check refuses a half-made change (SPEC-07-03).
+#
+# WHY THE SHAPE IS FIXED. `docs/DOMAIN_MODEL.md` R1 and ADR-0002 separate five
+# namespaces: Skill (what the application is doing), Capability (what class of
+# processing serves it), Policy (how carefully it is treated), Alias (what to ask
+# LiteLLM for), Model (which weights run). A skill declares the first three and never
+# the last two. Nothing in this file names a model, a provider or an endpoint.
+#
+# FIELD CONVENTIONS
+#   id                the string an application puts in `skill`. Kebab-case, verb-ish,
+#                     unique. A skill is a request for a document, not a document —
+#                     see DOMAIN_MODEL "a Skill is *not* a Report".
+#   purpose           one sentence of clinical intent.
+#   inputs / outputs  what the request must carry and what the answer must be.
+#   risk              low | moderate | high | critical — the operator's judgement, and
+#                     `DOMAIN_MODEL` Q6 says every value below is NOT yet ratified by a
+#                     clinician. These are proposals for the clinical owner.
+#   approval          required | not-required. `required` means a named clinician must
+#                     sign the output before it reaches a patient (P3, P11).
+#   audit             true | false. Every high or critical skill is forced true, and a
+#                     catalogue that declares otherwise fails at startup
+#                     (`policy.py:_reject_unsafe_combination`).
+#   capability        default | fast | reasoning — the three that exist today.
+#                     `vision` and `embedding` are named below and DO NOT EXIST:
+#                     `README-ROUTING.md` lists that split as unfinished work, and
+#                     `schemas.py` refuses a content-part array with 422 rather than
+#                     dropping an image in silence.
+#   status            alpha   shippable on today's platform, with approval enforced by
+#                             the application (the model Sprint 7 proved).
+#                     beta    clinically sound but must wait for platform-verifiable
+#                             approval — ADR-0005 (SPECIFICATION §17).
+#                     blocked needs a capability or a service that does not exist.
+#   blocked_by        the decision or capability that unblocks it. Required when status
+#                     is not alpha.
+#   example_request   shorthand. Every request is `POST /chat` with
+#                     {"skill": <id>, "messages": [system, user]}; only the clinical
+#                     payload is shown. A body that names a model is rejected 422.
+#   example_response  shorthand of the answer's clinical content, not the wire envelope.
+#                     The envelope always adds request_id, model, provider,
+#                     selected_by, attempts, degraded, policy and usage
+#                     (SPEC-06-09, SPEC-06-10).
+#
+# EXAMPLES ARE DELIBERATELY SHORT. Expanding 100 verbatim request/response pairs
+# would be about 3,000 lines of near-identical JSON that rots the moment the envelope
+# changes. Twelve skills carry full examples instead, in
+# `docs/product/SKILL_EXAMPLES.md`, and they are the ones a reviewer should read:
+# the highest-risk six plus the six with a non-obvious output shape.
+
+version: 1
+date: 2026-10-08
+owner: clinical owner (unratified — see DOMAIN_MODEL Q6)
+deployment_target: CARE Diagnostics and Hope Neurotrauma & Multispeciality Hospital
+conventions:
+  capabilities_shipped: [default, fast, reasoning]
+  capabilities_named_here_but_absent: [vision, embedding]
+  approval_meaning: a named clinician signs before the output reaches a patient
+  gateway_refuses_approval_required: true   # SPECIFICATION §17, ADR-0005 unwritten
+
+skills:
+
+  # ---------------------------------------------------------------- 1. radiology workflow
+  # The umbrella skill plus the five workflow moves that are not a report themselves.
+  - id: radiology-report
+    purpose: Draft the structured report for any imaging study from the reporting clinician's dictation.
+    inputs: clinical indication, modality, study name, dictated findings, optional technique
+    outputs: five-section report with provenance, skill and policy attached
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=radiology-report; "62M sudden right hemiparesis 3h; CT head non-contrast: no haemorrhage, lost insular ribbon"'
+    example_response: 'findings "…"; impression "No acute haemorrhage. Early left MCA infarct not excluded."'
+
+  - id: radiology-worklist-triage
+    purpose: Order the reporting queue so a suspected stroke or bleed is read first.
+    inputs: study list with modality, clinical indication and acquisition time
+    outputs: ranked list with the reason for each promotion
+    risk: moderate
+    approval: not-required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=radiology-worklist-triage; 14 studies with indications'
+    example_response: 'promote #7 (code stroke, 41 min), #12 (suspected bleed); rest by acquisition age'
+
+  - id: radiology-critical-value-alert
+    purpose: Decide whether a drafted finding is a critical result that must reach the referring clinician now.
+    inputs: findings and impression text, referring clinician, contact route
+    outputs: critical yes or no, the sentence that justifies it, and the notification draft
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: beta
+    blocked_by: ADR-0005 — a critical result is a clinical act with a time stamp and an owner; it cannot rest on an application-local flag
+    example_request: 'skill=radiology-critical-value-alert; "tension pneumothorax, mediastinal shift"'
+    example_response: 'critical: true; reason "tension physiology"; notify "Dr Rao, referring, now" draft'
+
+  - id: radiology-second-read-request
+    purpose: Ask for a second consultant read on a study the reporting radiologist is not certain about.
+    inputs: draft report, the specific uncertainty, target subspecialty
+    outputs: a structured referral note to the second reader, with the uncertainty named
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=radiology-second-read-request; "small dural AV fistula suspected, uncertain"'
+    example_response: 'to neuroradiology; question "is the early draining vein real on these images"'
+
+  - id: radiology-study-quality-check
+    purpose: Flag a study that is technically inadequate for reporting before a radiologist opens it.
+    inputs: study description, sequence or projection list, stated clinical question
+    outputs: adequacy verdict, what is missing, and a recall recommendation
+    risk: moderate
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=radiology-study-quality-check; "CT lumbar spine, no coronal recon, question: fracture"'
+    example_response: 'inadequate: missing coronal recon; recall "yes, same session"'
+
+  - id: usg-advisory-suggestions
+    purpose: Propose advisory ultrasound chips — findings, impression, measurement flags, growth notes — for a radiologist to accept or reject one at a time.
+    inputs: structured study context (organ list, measurements, prior comparison, section text the workspace chooses to send)
+    outputs: a short JSON array of chips, each with kind, section, text, rationale and confidence
+    risk: moderate
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=usg-advisory-suggestions; "gallbladder: two mobile stones 6 mm, wall 2 mm, sonographic Murphy negative"'
+    example_response: 'chip impression "Cholelithiasis, no features of acute cholecystitis"; chip measurement_flag "wall 2 mm — normal"'
+
+    # THE ONE SKILL IN THIS FILE THAT CAME FROM THE CUSTOMER INSTEAD OF THE OTHER
+    # WAY ROUND. It is not a proposal: the CARE ERP already ran this feature
+    # (`usg-reports`-style advisory chips, `lib/ai/usgGatewayProvider.ts`) and
+    # Sprint 8 moved it behind the Gateway. `models.yaml` authorises it today with
+    # `approval_required: false` — the D4 rule in RADIOLOGY_WORKFLOW.md, because
+    # the Gateway refuses a skill that declares it. The accept-only gate is real
+    # and lives in the ERP (`routes/usgAi.ts` write-guard, fetal-sex refusal in
+    # `usgAiAssistant`), which is what `approval: required` means here.
+    # Full migration record: docs/integration/AI_ENTRY_POINTS_CARE_ERP.md
+
+  # ---------------------------------------------------------------- 2. CT (9)
+  - id: ct-head-acute-stroke
+    purpose: Draft the CT head report for a suspected acute stroke within the intervention window.
+    inputs: onset time, deficits, non-contrast CT findings
+    outputs: findings, impression with ASPECTS when scoreable, and the escalation line
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ct-head-acute-stroke; "onset 02:40, right hemiparesis; no haemorrhage, loss of left insular ribbon"'
+    example_response: 'impression "Early left MCA territory ischaemia, ASPECTS 8. No haemorrhage."; escalate "stroke team now"'
+
+  - id: ct-head-trauma
+    purpose: Draft the CT head report for head injury, answering the surgical questions first.
+    inputs: mechanism, GCS, anticoagulation status, findings
+    outputs: findings, impression, and every traumatic lesion classified by type and size
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ct-head-trauma; "RTA, GCS 12, on warfarin; left temporal extradural 14 mm"'
+    example_response: 'impression "Left extradural haematoma 14 mm with 6 mm shift. Neurosurgical review now."'
+
+  - id: ct-perfusion-stroke
+    purpose: Draft a perfusion report separating core from penumbra for thrombectomy decisions.
+    inputs: CTA/CTP findings, NIHSS, time from onset
+    outputs: core volume, penumbra volume, mismatch ratio, and the decision-relevant summary
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ct-perfusion-stroke; "CBF core 12 mL, Tmax>6 78 mL, M1 occlusion"'
+    example_response: 'impression "Large mismatch (66 mL), M1 occlusion. Thrombectomy candidate."'
+
+  - id: cta-head-neck
+    purpose: Draft a CT angiogram report of the head and neck vessels.
+    inputs: indication, findings on occlusion, stenosis, dissection, aneurysm
+    outputs: findings by vessel, impression with the lesion that answers the question
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=cta-head-neck; "aphasia; left M1 cutoff, no stenosis internally"'
+    example_response: 'impression "Left M1 occlusion. No significant extracranial stenosis."'
+
+  - id: ct-chest-pulmonary-embolism
+    purpose: Draft a CTPA report answering one question — is there a pulmonary embolus.
+    inputs: clinical probability, findings by lobar level, right-heart measures
+    outputs: positive or negative with the exact segmental level, and RV/LV ratio if given
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ct-chest-pulmonary-embolism; "pleuritic pain, tachycardic; filling defect right lower lobar"'
+    example_response: 'impression "Acute PE, right lower lobar and segmental. RV/LV 1.2, no strain."'
+
+  - id: ct-chest-lung-nodule
+    purpose: Draft a chest CT report with lung-RADS style nodule classification and follow-up interval.
+    inputs: nodule size, density, location, prior imaging comparison
+    outputs: characterised nodule list, category, and the interval or referral it implies
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ct-chest-lung-nodule; "6 mm part-solid right upper lobe, new versus 2024"'
+    example_response: 'impression "New 6 mm part-solid nodule RUL, category 4X — tissue or 3-month CT."'
+
+  - id: ct-abdomen-acute
+    purpose: Draft an acute abdominal CT report — appendicitis, diverticulitis, obstruction, ischaemia, perforation.
+    inputs: pain history, findings, free fluid or gas, transition point
+    outputs: the diagnosis the surgeon acts on, plus what was excluded
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ct-abdomen-acute; "RLQ pain 18h; appendix 11 mm, appendicolith, fat stranding"'
+    example_response: 'impression "Acute appendicitis with appendicolith. No perforation or collection."'
+
+  - id: ct-abdomen-oncology-staging
+    purpose: Draft a contrast CT staging report with measurable lesions and TNM-relevant findings.
+    inputs: known primary, lesion measurements, nodal and visceral status
+    outputs: measured lesion table in prose, staging-relevant impression, response comparison
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ct-abdomen-oncology-staging; "colon CA, liver lesion 32 to 24 mm on chemo"'
+    example_response: 'impression "Partial response; liver metastasis now 24 mm. No new disease."'
+
+  - id: ct-spine-trauma
+    purpose: Draft a cervical or thoracolumbar CT trauma report with a distraction-injury check.
+    inputs: mechanism, findings by level, alignment, posterior element status
+    outputs: fracture classification, stability comment, and the next imaging the findings demand
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ct-spine-trauma; "fall from height; C6 anterior teardrop, prevertebral swelling"'
+    example_response: 'impression "C6 teardrop fracture — unstable flexion-distraction. MRI and spine review."'
+
+  # ---------------------------------------------------------------- 3. MRI (8)
+  - id: mr-brain-tumour
+    purpose: Draft a brain tumour MRI report with volumetric and mass-effect descriptors.
+    inputs: symptoms, sequence findings, enhancement pattern, prior comparison
+    outputs: lesion characterisation, differential, and what the neurosurgeon needs to plan
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mr-brain-tumour; "seizures; 3.1 cm ring-enhancing left frontal lesion, 9 mm oedema"'
+    example_response: 'impression "Ring-enhancing left frontal lesion — HGG vs metastasis. MR spectroscopy/perfusion."'
+
+  - id: mr-brain-epilepsy
+    purpose: Draft a protocolled epilepsy MRI report keyed to the surgical question.
+    inputs: seizure semiology, hippocampal signal and volume, focal cortical dysplasia search
+    outputs: lateralising findings, negative statements where nothing was seen
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mr-brain-epilepsy; "left temporal epilepsy; right HC atrophy and T2 hyperintensity"'
+    example_response: 'impression "Right hippocampal sclerosis, concordant with semiology."'
+
+  - id: mr-brain-stroke
+    purpose: Draft an acute MRI stroke report — diffusion-positive territory, age, haemorrhagic transformation.
+    inputs: deficits, DWI/ADC/SWI findings, time from onset
+    outputs: territory and age of infarcts, plus embolic-pattern comment
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mr-brain-stroke; "vertigo; DWI bright left PCA territory, ADC dark"'
+    example_response: 'impression "Acute left PCA infarct. No haemorrhagic transformation."'
+
+  - id: mr-brain-dementia
+    purpose: Draft a neurodegenerative MRI report with visual medial temporal atrophy scoring.
+    inputs: cognitive history, atrophy pattern, white matter burden, ventriculometry
+    outputs: pattern-based differential and the reversible causes excluded
+    risk: moderate
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mr-brain-dementia; "74F memory; MTA grade 3, Evans 0.34, disproportionate sulcal atrophy"'
+    example_response: 'impression "Medial temporal atrophy out of proportion to hydrocephalus — NPH vs AD, clinical correlation."'
+
+  - id: mr-cervical-spine-myelopathy
+    purpose: Draft a cervical spine MRI report for suspected myelopathy, with cord signal and canal measures.
+    inputs: upper-limb signs, cord signal change, canal diameter, level-by-level compression
+    outputs: the compressive level, cord-change comment, and surgical relevance
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mr-cervical-spine-myelopathy; "clumsy hands, Hoffmann C5-C6 disc-bar, canal 8 mm"'
+    example_response: 'impression "C5-C6 severe stenosis with cord T2 signal — myelopathy, decompression."'
+
+  - id: mr-lumbar-spine-radicular
+    purpose: Draft a lumbar spine MRI report matched to the dermatome the clinician examined.
+    inputs: dermatomal symptoms, disc and foraminal findings by level
+    outputs: concordant-level statements first, incidental findings last
+    risk: moderate
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mr-lumbar-spine-radicular; "left S1 radiculopathy; L5-S1 left paracentral disc extrusion"'
+    example_response: 'impression "L5-S1 left extruded disc compressing the traversing left S1 root — concordant."'
+
+  - id: mr-joint-knee-shoulder
+    purpose: Draft a knee or shoulder MRI report against the clinical test that prompted it.
+    inputs: examination findings, sequence-by-sequence observations
+    outputs: the structure that answers the clinical question, with grading
+    risk: moderate
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mr-joint-knee-shoulder; "Lachun positive; ACL absent fibres, PCL intact"'
+    example_response: 'impression "Complete ACL tear. No meniscal tear. Orthopaedic review."'
+
+  - id: mr-angiography-intracranial
+    purpose: Draft an intracranial MRA/TOF report for aneurysm or stenosis screening.
+    inputs: indication, vessel-by-vessel findings, aneurysm size and neck
+    outputs: the vascular lesion with treatment-relevant anatomy
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mr-angiography-intracranial; "headache; 4 mm AComm aneurysm, neck 2 mm"'
+    example_response: 'impression "4 mm anterior communicating artery aneurysm. Neurosurgical assessment."'
+
+  # ---------------------------------------------------------------- 4. Ultrasound (7)
+  - id: us-abdomen
+    purpose: Draft a general abdominal ultrasound report from dictated organ-by-organ findings.
+    inputs: indication, organ findings, measurements given
+    outputs: structured findings by organ, impression, and the next study if implied
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=us-abdomen; "RUQ pain; 8 mm mobile gallstone, wall 4 mm, sonographic Murphy positive"'
+    example_response: 'impression "Acute calculous cholecystitis. Surgical referral."'
+
+  - id: us-kidney-urinary
+    purpose: Draft a renal and urinary bladder ultrasound report with hydronephrosis grading.
+    inputs: indication, cortical thickness, collecting system, post-void residue
+    outputs: graded obstruction, renal parenchymal comment, and the urological action
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=us-kidney-urinary; "rising creatinine; bilateral grade 3 hydronephrosis, prostate 62 mL"'
+    example_response: 'impression "Bilateral high-grade obstruction, likely bladder outlet. Urgent decompression."'
+
+  - id: us-liver-chronic-disease
+    purpose: Draft a liver report addressing steatosis, fibrosis suspicion and focal lesions.
+    inputs: liver function tests, echotexture, spleen size, varices if sought
+    outputs: chronicity pattern, focal lesion characterisation, and cirrhosis-complication search
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=us-liver-chronic-disease; "thrombocytopenia; coarse echo pattern, spleen 14.2 cm, monophasic PV"'
+    example_response: 'impression "Features of chronic liver disease with portal hypertension. HCC surveillance."'
+
+  - id: us-thyroid
+    purpose: Draft a thyroid ultrasound report with a TI-RADS style score and a biopsy or follow-up decision.
+    inputs: nodule size, composition, echogenicity, calcification, laterocervical nodes
+    outputs: scored nodule list and the size threshold that triggers FNA
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=us-thyroid; "13 mm hypoechoic solid nodule, microcalcifications, taller-than-wide"'
+    example_response: 'impression "High-suspicion 13 mm nodule (TR5) — FNA indicated."'
+
+  - id: us-breast-targeted
+    purpose: Draft a targeted breast ultrasound report correlated with a mammographic or clinical finding.
+    inputs: lump location, sonographic features, axillary nodes
+    outputs: BI-RADS-style assessment and the tissue decision
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=us-breast-targeted; "left upper outer lump; 11 mm irregular shadowing mass, level I node abnormal"'
+    example_response: 'impression "BI-RADS 5, 11 mm suspicious mass with abnormal axillary node — biopsy now."'
+
+  - id: us-dvt-lower-limb
+    purpose: Draft a lower-limb compression ultrasound report for suspected DVT.
+    inputs: symptoms, extent, compressibility by segment
+    outputs: proximal versus distal result, extent, and the treatment-relevant conclusion
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=us-dvt-lower-limb; "left calf swelling; femoral vein non-compressible"'
+    example_response: 'impression "Acute proximal DVT, left femoral vein. Anticoagulate now."'
+
+  - id: us-carotid-doppler
+    purpose: Draft a carotid Doppler report with stenosis grading and a surgical or medical pathway.
+    inputs: risk factors, peak velocities, plaque morphology, contralateral status
+    outputs: NASCET-style grade, symptomatic-side identification, and next-step comment
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=us-carotid-doppler; "right amaurosis fugax; PSA 340, EDV 130 right ICA"'
+    example_response: 'impression "Right ICA 70-99% symptomatic stenosis — endarterectomy assessment."'
+
+  # ---------------------------------------------------------------- 5. Obstetric ultrasound (5)
+  - id: us-obstetric-dating
+    purpose: Draft a first-trimester dating and viability ultrasound report.
+    inputs: last menstrual period, CRL, yolk sac, adnexa
+    outputs: gestational age by CRL, discrepancy against dates, and viability statement
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=us-obstetric-dating; "LMP 7+4; single intrauterine pregnancy, CRL 11 mm"'
+    example_response: 'impression "Single live IUP, 7 weeks 2 days by CRL. Agrees with dates."'
+
+  - id: us-obstetric-anomaly
+    purpose: Draft the mid-pregnancy anomaly scan report, organ by organ, with soft markers.
+    inputs: gestation, biometry, system-by-system anatomy, placenta, liquor, cervix
+    outputs: a complete negative survey plus any finding with its counselling implication
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=us-obstetric-anomaly; "19 weeks; ventriculomegaly 10.5 mm, otherwise normal"'
+    example_response: 'impression "Borderline ventriculomegaly — targeted review, fetal medicine referral."'
+
+  - id: us-obstetric-doppler
+    purpose: Draft a feto-placental Doppler report for growth restriction surveillance.
+    inputs: EFW centile, umbilical and MCA indices, ductus venosus, liquor
+    outputs: staging-relevant Doppler pattern and the delivery-timing signal
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=us-obstetric-doppler; "EFW 3rd centile, absent end-diastolic flow, CPR low"'
+    example_response: 'impression "FGR with absent umbilical EDF — stage 2. Antenatal surveillance and steroids."'
+
+  - id: us-nuchal-translucency
+    purpose: Draft the NT screening report with the measurement quality the screening standard demands.
+    inputs: gestation, CRL, NT thickness, visible anatomy
+    outputs: NT value with its risk implication and the combined-screening handoff
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=us-nuchal-translucency; "CRL 62 mm, NT 3.4 mm, nasal bone present"'
+    example_response: 'impression "Increased NT 3.4 mm — combined screening and fetal medicine referral."'
+
+  - id: us-obstetric-growth
+    purpose: Draft a growth-scan report with centiles and the interval to the next scan.
+    inputs: biometry, EFW centile, liquor, Doppler if done
+    outputs: growth trajectory comment and surveillance interval
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=us-obstetric-growth; "32 weeks, EFW 8th centile, liquor normal"'
+    example_response: 'impression "Small but stable, EFW 8th centile. Umbilical Doppler and 2-week review."'
+
+  # ---------------------------------------------------------------- 6. X-ray and fluoroscopy (5)
+  - id: xr-chest
+    purpose: Draft a chest radiograph report addressing the acute question first.
+    inputs: symptoms, projection, findings by structure, lines and tubes
+    outputs: positive findings with a differential, and what is not seen
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=xr-chest; "fever, hypoxic; right lower zone consolidation, no effusion"'
+    example_response: 'impression "Right lower lobe consolidation — community-acquired pneumonia."'
+
+  - id: xr-trauma-survey
+    purpose: Draft the polytrauma radiograph series report — chest, pelvis and long bones in one sitting.
+    inputs: mechanism, series, life-threatening findings
+    outputs: the findings that change resuscitation, in priority order
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=xr-trauma-survey; "RTC; widened mediastinum, left haemothorax, pelvic ring disruption"'
+    example_response: 'impression "Suspected aortic injury plus open-book pelvis. CT angiogram and Massive Transfusion."'
+
+  - id: xr-extremity-fracture
+    purpose: Draft a fracture report with displacement, angulation and the need for imaging beyond the request.
+    inputs: site, injury mechanism, views, alignment measures
+    outputs: fracture description in the terms the orthopaedic surgeon reduces by
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=xr-extremity-fracture; "distal radius, 22 degrees dorsal angulation, intra-articular step"'
+    example_response: 'impression "Unstable distal radius fracture with 2 mm articular step — orthopaedic referral."'
+
+  - id: xr-spine-alignment
+    purpose: Draft a plain radiograph spine report for scoliosis, spondylolisthesis or trauma alignment.
+    inputs: region, curvature or listhesis measures, destruction
+    outputs: measured alignment findings and what the plain film cannot exclude
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=xr-spine-alignment; "lumbar grade I anterolisthesis L4 on L5, dynamic films"'
+    example_response: 'impression "L4-5 grade I isthmic listhesis, mobile on flexion-extension."'
+
+  - id: xr-abdomen-obstruction
+    purpose: Draft an erect abdominal radiograph report for obstruction or perforation.
+    inputs: pain and vomiting history, dilated loops, air-fluid levels, free gas signs
+    outputs: mechanical versus ileus conclusion, and the surgical next step
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=xr-abdomen-obstruction; "central dilated loops 5.5 cm, valvulae seen to the right, no free gas"'
+    example_response: 'impression "Mechanical small-bowel obstruction. CT abdomen with contrast."'
+
+  # ---------------------------------------------------------------- 7. Mammography and breast imaging (5)
+  - id: mg-screening
+    purpose: Draft a screening mammogram report with breast density and a recall decision.
+    inputs: prior screens, findings by view, density category
+    outputs: BI-RADS assessment, density notice, and the interval or recall action
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mg-screening; "spiculated 9 mm retroareolar density left, BI-RADS 4C"'
+    example_response: 'impression "BI-RADS 4C — tissue diagnosis required. Recall booked."'
+
+  - id: mg-diagnostic
+    purpose: Draft a diagnostic mammogram report for a clinically presenting breast problem.
+    inputs: clinical finding, tomosynthesis and spot compression views
+    outputs: the correlative finding or its absence, with ultrasound disposition
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=mg-diagnostic; "palpable lump; no correlate on tomosynthesis, US performed same visit"'
+    example_response: 'impression "No mammographic correlate; US BI-RADS 4 — same-session FNA."'
+
+  - id: mg-density-notice
+    purpose: Generate the patient-facing breast density notice required by the screening programme.
+    inputs: density category, screening interval
+    outputs: a plain-language notice with the limitation stated
+    risk: low
+    approval: not-required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=mg-density-notice; category C'
+    example_response: '"Your breast tissue is heterogeneously dense… this can hide lumps… discuss supplementary screening."'
+
+  - id: breast-microcalcification-triage
+    purpose: Decide whether clustered microcalcifications require stereotactic biopsy.
+    inputs: morphology and distribution of calcifications
+    outputs: BI-RADS category with the biopsy route named
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=breast-microcalcification-triage; "fine pleomorphic calcifications, segmental, 4 cm"'
+    example_response: 'impression "BI-RADS 5 — stereotactic vacuum biopsy for suspected DCIS."'
+
+  - id: breast-lesion-recall-decision
+    purpose: Determine whether an asymptomatic lesion found on screening needs recall at all.
+    inputs: lesion type, size, stability against priors
+    outputs: recall versus routine-interval decision with the reasoning recorded
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=breast-lesion-recall-decision; "4 mm simple cyst, unchanged for 6 years"'
+    example_response: 'impression "BI-RADS 2, benign. Routine interval, no recall."'
+
+  # ---------------------------------------------------------------- 8. Neurology and neurosurgery (5)
+  - id: neuro-glasgow-coma-scale
+    purpose: Assemble a documented GCS from its components, with the intubation caveat.
+    inputs: eye, verbal, motor responses and any sedation or airway intervention
+    outputs: total score plus the component string, and an unassessable flag where needed
+    risk: high
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=neuro-glasgow-coma-scale; "E2 V(intubated) M5"'
+    example_response: 'impression "GCS 7T (E2 V-t M5). Serial observation."'
+
+  - id: neuro-traumatic-brain-injury-classification
+    purpose: Classify a traumatic brain injury CT by Rotterdam and Marshall categories for prognosis.
+    inputs: CT findings, midline shift, cistern status, petechial haemorrhage
+    outputs: the category, why it was assigned, and the prognosis conversation it implies
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=neuro-traumatic-brain-injury-classification; "compressed basal cisterns, no shift, 2 mm petechiae"'
+    example_response: 'impression "Rotterdam class III, Marshall IV. Poor-outcome trajectory discussion."'
+
+  - id: neuro-stroke-thrombolysis-check
+    purpose: Check a draft CT head report against the clinical record for thrombolysis decision points.
+    inputs: onset, NIHSS, contraindications, CT findings
+    outputs: a decision-support summary naming exclusions and residual uncertainty
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: beta
+    blocked_by: ADR-0005 — decision support on a time-critical treatment cannot be delivered without platform-verifiable sign-off; SPECIFICATION §17
+    example_request: 'skill=neuro-stroke-thrombolysis-check; "onset 90 min, no haemorrhage, INR 1.1"'
+    example_response: 'impression "No CT exclusion. Within window — treat per local stroke protocol."'
+
+  - id: neuro-hydrocephalus-followup
+    purpose: Draft a ventricular-size follow-up report for shunted or watch-listed hydrocephalus.
+    inputs: prior measurements, current study, clinical status
+    outputs: trend in ventricular calibres and shunt-function comment
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=neuro-hydrocephalus-followup; "Evans 0.31 from 0.36, VPS in situ, no symptoms"'
+    example_response: 'impression "Reduced ventricular calibre; shunt functioning. Routine interval."'
+
+  - id: neuro-spinal-cord-injury-asia
+    purpose: Assemble an ASIA impairment grade from the sensory and motor examination dictated.
+    inputs: dermatome and myotome findings, zone of preservation
+    outputs: ASIA grade with the level, and the radiological correlate
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=neuro-spinal-cord-injury-asia; "no sacral sparing, motor level C5"'
+    example_response: 'impression "ASIA A, C5 motor level. Cord signal change at C4-C5."'
+
+  # ---------------------------------------------------------------- 9. Emergency medicine (4)
+  - id: ed-triage-note
+    purpose: Draft the triage note that carries a patient's presentation into the department's queue.
+    inputs: vitals, presenting complaint, time
+    outputs: acuity category with the reason and the safety-net instruction
+    risk: high
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=ed-triage-note; "crushing chest pain 20 min, diaphoretic, BP 90/60"'
+    example_response: 'impression "Category 1. Immediate resuscitation room, ECG within 5 minutes."'
+
+  - id: ed-chest-pain-pathway
+    purpose: Summarise a chest-pain workup against the department's rule-in pathway.
+    inputs: serial troponins, ECG, TIMI or HEART score components
+    outputs: pathway disposition with the values that decided it
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ed-chest-pain-pathway; "troponin 14 to 61, HEART 7, no ECG change"'
+    example_response: 'impression "Rising troponin, high HEART — admit, cardiology, invasive strategy."'
+
+  - id: ed-paediatric-fever-pathway
+    purpose: Run the febrile-child pathway against age, fever duration and inflammatory markers.
+    inputs: age, temperature, exam, CRP and procalcitonin where available
+    outputs: risk band, investigations indicated, and the discharge safety net
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=ed-paediatric-fever-pathway; "42-day-old, 38.4 C, CRP 46"'
+    example_response: 'impression "High risk — full septic screen, admit, IV antibiotics now."'
+
+  - id: ed-discharge-instructions
+    purpose: Turn a clinician's discharge plan into instructions the patient can follow.
+    inputs: diagnosis, treatment given, medicines, follow-up, warning signs
+    outputs: plain-language instruction sheet with the return-immediately list
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=ed-discharge-instructions; "simple concussion, discharged with next-of-kin"'
+    example_response: 'impression "Rest 48 h, paracetamol only, someone must wake you tonight; return if vomiting or drowsy."'
+
+  # ---------------------------------------------------------------- 10. Internal medicine and ward (4)
+  - id: clinical-summary
+    purpose: Produce an inter-impression or shift-handover summary of one admission.
+    inputs: problem list, active treatments, key results, unresolved questions
+    outputs: a dated summary with the pending actions a clinician must own
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=clinical-summary; "day 4, AKI improving, cultures pending, on piperacillin-tazobactam"'
+    example_response: 'impression "Day 4 sepsis source urinary; creatinine 190 from 340; review cultures AM."'
+
+  - id: ward-round-daily-note
+    purpose: Draft the daily ward-round note from overnight events and current observations.
+    inputs: overnight events, vitals trend, fluid balance, new results
+    outputs: structured round note with plan-by-problem
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=ward-round-daily-note; "afebrile overnight, urine output 40 mL/h, K 3.1"'
+    example_response: 'impression "Haemodynamically stable. Replace potassium; continue IV fluids 125 mL/h."'
+
+  - id: problem-list-reconciliation
+    purpose: Reconcile a problem list across two care settings so nothing is silently dropped.
+    inputs: pre-admission list, current list, discharge plan
+    outputs: additions, removals and unmatched items flagged for a human
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=problem-list-reconciliation; "epilepsy on the community list is absent from ours"'
+    example_response: 'impression "One unmatched problem — epilepsy. Do not discharge before review."'
+
+  - id: medication-reconciliation
+    purpose: Compare prescribed, administered and home medicines and name every discrepancy.
+    inputs: home list, current chart, administration record
+    outputs: discrepancy table with the clinical risk each one carries
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=medication-reconciliation; "home warfarin omitted since day 2"'
+    example_response: 'impression "Omission: warfarin. Thrombosis risk; restart or bridge decision by clinician."'
+
+  # ---------------------------------------------------------------- 11. Critical care and theatre (4)
+  - id: intensive-care-bulletin
+    purpose: Draft the ICU daily bulletin by organ system for the multidisciplinary round.
+    inputs: neuro, respiratory, cardiovascular, renal, metabolic and haematology lines
+    outputs: six-system bulletin with the day's trajectory
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=intensive-care-bulletin; "day 3 ARDS, driving pressure 14, noradrenaline 0.08"'
+    example_response: 'impression "Respiratory stabilising, weaning vasopressor. Proning not indicated today."'
+
+  - id: operative-note-draft
+    purpose: Turn a surgeon's dictated procedure into an operative note in the local template order.
+    inputs: procedure, indication, findings, steps, specimens, blood loss, complications
+    outputs: a structured operative note with every unspecified field marked not stated
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=operative-note-draft; "laparoscopic appendectomy, gangrenous, no perforation, specimen to histopath"'
+    example_response: 'impression "Operative note drafted; blood loss and specimens recorded; findings for histopathology."'
+
+  - id: pre-anaesthetic-assessment
+    purpose: Draft a pre-anaesthetic assessment with ASA grade and the airway and risk questions raised.
+    inputs: comorbidity, drugs, allergies, airway examination, investigation results
+    outputs: ASA grade, plan, and the specific question the anaesthetist must answer
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=pre-anaesthetic-assessment; "62-year-old, Mallampati 4, DM on metformin, EF 45%"'
+    example_response: 'impression "ASA III, anticipated difficult airway; arterial line; hold metformin day of surgery."'
+
+  - id: post-operative-instruction
+    purpose: Draft ward and home instructions specific to the operation performed.
+    inputs: procedure, anaesthetic, intraoperative events, discharge intent
+    outputs: monitoring instructions, wound care, analgesia plan and red flags
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=post-operative-instruction; "inguinal hernia repair, day case"'
+    example_response: 'impression "Scrotal support, wound inspection day 3, no lifting 4 weeks; attend if fever or swelling."'
+
+  # ---------------------------------------------------------------- 12. Obstetrics and gynaecology (4)
+  - id: labour-progress-summary
+    purpose: Summarise labour progress against the partogram, flagging arrest or hyperstimulation.
+    inputs: contractions, cervical dilatation series, fetal heart lines, oxytocin doses
+    outputs: progress pattern with the intervention threshold reached or not
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=labour-progress-summary; "6 cm unchanged 5 hours on oxytocin, category 2 CTG"'
+    example_response: 'impression "Arrest of dilatation, prolonged second stage risk — consultant review for caesarean."'
+
+  - id: delivery-summary
+    purpose: Draft the delivery record for mother and baby in one signed summary.
+    inputs: gestation, mode, induction details, blood loss, perineal status, Apgars, neonatal measures
+    outputs: the delivery summary with the postpartum actions it requires
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=delivery-summary; "39 weeks, SVD, EBL 650 mL, 2nd-degree tear, Apgar 8/9"'
+    example_response: 'impression "Primary PPH, controlled. Oxytocin infusion, haemoglobin check, midwife observations q15 min."'
+
+  - id: gynaecological-ultrasound-report
+    purpose: Draft a transvaginal and pelvic ultrasound report with endometrial and ovarian assessment.
+    inputs: bleeding or pain history, uterine and ovarian findings, endometrial thickness
+    outputs: pattern-based impression with the referral or surveillance it demands
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=gynaecological-ultrasound-report; "postmenopausal bleed, endometrium 8 mm, left ovarian cyst 4 cm solid"'
+    example_response: 'impression "Endometrial thickness 8 mm — hysteroscopy; complex ovarian lesion — gynae-oncology."'
+
+  - id: pcos-assessment-note
+    purpose: Assemble a Rotterdam-criteria PCOS assessment from history, biochemistry and ultrasound.
+    inputs: cycle history, androgen features, LH and FSH, testosterone, follicle counts
+    outputs: criteria met or not, exclusions, and the metabolic follow-up
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=pcos-assessment-note; "oligomenorrhoea, hirsutism, 24 follicles right ovary"'
+    example_response: 'impression "Rotterdam criteria met (2 of 3). Thyroid and prolactin exclusions; metabolic screening."'
+
+  # ---------------------------------------------------------------- 13. Paediatrics and neonatology (4)
+  - id: neonatal-delivery-transition-note
+    purpose: Draft the neonatal transition and resuscitation record against the delivery events.
+    inputs: gestation, delivery events, Apgars, resuscitation steps, current condition
+    outputs: transition summary with the cooling or observation decision it supports
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=neonatal-delivery-transition-note; "37 weeks, delayed breathing, PPV 4 min, Apgar 4/6/7"'
+    example_response: 'impression "Birth asphyxia with resuscitation. Check cord gas; Sarnat staging; cooling window open."'
+
+  - id: paediatric-growth-note
+    purpose: Plot and interpret growth velocity, calling out faltering growth early.
+    inputs: serial weights, heights, head circumference, centiles, feeding history
+    outputs: trend interpretation and the investigation or referral step
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=paediatric-growth-note; "8-month-old crossing two centile lines downward"'
+    example_response: 'impression "Faltering growth. Feeding assessment, coeliac and urine screening, dietitian."'
+
+  - id: immunisation-catchup-plan
+    purpose: Build a catch-up schedule for a child behind on the national calendar.
+    inputs: doses given with dates, age, contraindications
+    outputs: next-dose plan with minimum intervals and the doses still owed
+    risk: moderate
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=immunisation-catchup-plan; "4-year-old, 1 of 3 DPT, no measles"'
+    example_response: 'impression "Owes DPT x2 and MMR. Revaccination interval 4 weeks; recall booked."'
+
+  - id: paediatric-asthma-action-plan
+    purpose: Draft a written asthma action plan at the child's current control level.
+    inputs: control questions, reliever use, exacerbations, inhaler technique
+    outputs: green-yellow-red thresholds with the medication steps the family follows
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=paediatric-asthma-action-plan; "reliever 4 times a week, one steroid course this winter"'
+    example_response: 'impression "Not controlled — inhaled corticosteroid step-up, technique check, plan issued."'
+
+  # ---------------------------------------------------------------- 14. Pathology (4)
+  - id: pathology-review
+    purpose: Draft or review a surgical pathology report from dictated macroscopic and microscopic findings.
+    inputs: specimen, site, macroscopy, microscopy, margins, prior comparison
+    outputs: structured report ending in a diagnosis line with margin status
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=pathology-review; "colectomy, moderately differentiated adenocarcinoma, 2 of 18 nodes"'
+    example_response: 'impression "pT3 N1 (2/18), clear margins, lymphovascular invasion present."'
+
+  - id: cytopathology-report
+    purpose: Draft a cytology report with a Bethesda-style adequacy and category statement.
+    inputs: specimen adequacy, cell features, background
+    outputs: category, the clinical next step that category mandates
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=cytopathology-report; "thyroid FNA, follicular neoplasm Bethesda IV"'
+    example_response: 'impression "Bethesda IV — molecular testing or diagnostic lobectomy."'
+
+  - id: haematology-bone-marrow-report
+    purpose: Draft a bone marrow aspirate and trephine report with blast quantification.
+    inputs: cellularity, lineage description, blast percentage, iron stores, cytogenetics where present
+    outputs: pattern-based diagnosis line and the classification it fits
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=haematology-bone-marrow-report; "cellular marrow, 32% blasts, Auer rods"'
+    example_response: 'impression "Acute myeloid leukaemia, 32% blasts. Flow and cytogenetics for classification."'
+
+  - id: cervical-screening-report
+    purpose: Draft a cervical screening report with the management category the result mandates.
+    inputs: specimen adequacy, cytology findings, HPV status
+    outputs: category plus the recall or colposcopy decision
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=cervical-screening-report; "HSIL cytology, HPV 16 positive"'
+    example_response: 'impression "HPV-positive HSIL — direct colposcopy referral."'
+
+  # ---------------------------------------------------------------- 15. Non-imaging diagnostics (6)
+  - id: laboratory-panel-summary
+    purpose: Summarise a multiline laboratory panel into what is abnormal and what it means together.
+    inputs: panel values with reference ranges and prior results
+    outputs: abnormality list grouped by system, with the pattern named
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=laboratory-panel-summary; "Na 128, K 6.2, urea 41, eGFR 22"'
+    example_response: 'impression "Acute kidney injury with hyperkalaemia — treat potassium first, ECG now."'
+
+  - id: laboratory-critical-value-review
+    purpose: Recognise a critical laboratory value and drive the notification that must follow.
+    inputs: value, reference range, patient location, prior trend
+    outputs: critical flag, the action window, and the notification draft
+    risk: critical
+    approval: required
+    audit: true
+    capability: fast
+    status: beta
+    blocked_by: ADR-0005 — the notification is a timed clinical act and must be attributable to a named human on the platform record
+    example_request: 'skill=laboratory-critical-value-review; "platelets 18, ward 4"'
+    example_response: 'impression "Critical thrombocytopenia. Notify ward within 30 minutes; haematology."'
+
+  - id: electrocardiogram-report
+    purpose: Draft a 12-lead ECG report from the measurements and features the technician dictated.
+    inputs: rate, intervals, axis, ST and T changes, Q waves, prior comparison
+    outputs: a diagnostic ECG impression with the clinical action it triggers
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=electrocardiogram-report; "ST elevation V1-V4, reciprocal depression II III aVF, HR 104"'
+    example_response: 'impression "Acute anteroseptal STEMI. Activate cath lab."'
+
+  # ---------------------------------------------------------------- 16. peri-procedural and transfusion safety (4)
+  - id: contrast-safety-check
+    purpose: Screen a study request for contrast risk before the injection happens.
+    inputs: prior reaction, eGFR, metformin and beta-blocker status, pregnancy
+    outputs: proceed, premedicate or defer, with the reason stated for the record
+    risk: high
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=contrast-safety-check; "eGFR 38, previous urticaria to iodinated contrast, on metformin"'
+    example_response: 'impression "Defer to non-contrast or MRI; metformin hold rule applies. Radiologist decision."'
+
+  - id: contrast-extravasation-record
+    purpose: Record an extravasation incident with a grade and the follow-up it obliges.
+    inputs: volume, site, symptoms, immediate action taken
+    outputs: graded incident record with the review interval and the surgical trigger
+    risk: moderate
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=contrast-extravasation-record; "30 mL antecubital, swelling, paraesthesia present"'
+    example_response: 'impression "Grade 2 extravasation with neurological symptom — surgical review same day."'
+
+  - id: transfusion-reaction-record
+    purpose: Structure a suspected transfusion reaction for immediate action and mandatory reporting.
+    inputs: product, timing, vitals, haemolysis signs, bedside and lab findings
+    outputs: reaction classification, the stop-and-send actions, and the serology request
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: beta
+    blocked_by: ADR-0005 — a transfusion reaction is both a clinical act and a statutory notification; the accountable signature must be on the platform record
+    example_request: 'skill=transfusion-reaction-record; "fever and rigors 20 minutes into packed cells, dark urine"'
+    example_response: 'impression "Suspected acute haemolytic reaction. Stop, keep line, send bag and sample to blood bank now."'
+
+  - id: procedural-sedation-record
+    purpose: Draft the sedation record for a procedure performed outside the theatre.
+    inputs: agent and doses, monitoring intervals, airway interventions, recovery milestones
+    outputs: a sedation record with any hypoxaemic or hypotensive event named
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=procedural-sedation-record; "propofol 120 mg total, SpO2 88% for 40 s, jaw thrust"'
+    example_response: 'impression "Moderate sedation with one desaturation event responsive to airway manoeuvre."'
+
+  # ---------------------------------------------------------------- 17. rehabilitation and handover (2)
+  - id: stroke-rehabilitation-handover
+    purpose: Hand a stroke patient to rehabilitation with the deficits that drive the plan.
+    inputs: infarct territory and size, residual deficits, swallow status, cognition, social situation
+    outputs: a rehabilitation handover sheet tied to the imaging and clinical facts
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=stroke-rehabilitation-handover; "left MCA infarct, right hemiparesis, modified swallow safe"'
+    example_response: 'impression "Inpatient rehabilitation: motor, speech, driving assessment; secondary prevention listed."'
+
+  - id: neuro-critical-care-family-briefing
+    purpose: Prepare a structured family briefing note for a neuro-critical-care admission.
+    inputs: imaging and clinical status, interventions so far, prognosis band, questions asked
+    outputs: plain-language briefing with the uncertainty stated rather than smoothed over
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=neuro-critical-care-family-briefing; "class III TBI, ICP 24 on mannitol, no response to voice"'
+    example_response: 'impression "Severe injury, ICP uncontrolled at review; realistic outcome framing recorded."'
+
+  # ---------------------------------------------------------------- 18. infection and public health (2)
+  - id: notifiable-disease-report
+    purpose: Assemble the statutory notification for a notifiable disease in the local format.
+    inputs: diagnosis, onset date, exposure history, laboratory confirmation status
+    outputs: the notification fields complete, with the deadline it carries
+    risk: high
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=notifiable-disease-report; "typhoid confirmed, blood culture positive, onset 6 days"'
+    example_response: 'impression "Notify state health authority within 24 hours; fields complete, clinician to sign."'
+
+  - id: healthcare-associated-infection-review
+    purpose: Review whether an infection arose during a stay, against the surveillance definition.
+    inputs: admission date, culture dates, device history, unit antimicrobial use
+    outputs: community versus healthcare-associated classification with the criterion used
+    risk: moderate
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=healthcare-associated-infection-review; " urine culture day 6, catheter day 2"'
+    example_response: 'impression "Meets CAUTI surveillance definition. Report to infection control committee."'
+
+  # ---------------------------------------------------------------- 19. cardiopulmonary and neurophysiology (5)
+  - id: echocardiogram-report
+    purpose: Draft a transthoracic echocardiogram report from the measurements the sonographer recorded.
+    inputs: chamber sizes, ejection fraction method, valve findings, diastolic parameters, IVC
+    outputs: an integrated impression answering the clinical question asked
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=echocardiogram-report; "EF 32% biplane, severe MR, E/e 18, PASP 46"'
+    example_response: 'impression "Reduced EF with severe MR and raised filling pressures. Heart-failure pathway."'
+
+  - id: holter-arrhythmia-summary
+    purpose: Summarise ambulatory rhythm monitoring into burden, episodes and symptom correlation.
+    inputs: total beats, arrhythmia episodes, longest pause, burden percentages, symptom log
+    outputs: a monitored-rhythm impression with the clinical decision it supports
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=holter-arrhythmia-summary; "AF burden 18%, longest 4 min, 3 palpitation episodes correlated"'
+    example_response: 'impression "Paroxysmal AF with 18% burden, symptomatic — anticoagulation decision."'
+
+  - id: spirometry-report
+    purpose: Draft a spirometry report with a bronchodilator response interpretation.
+    inputs: FVC, FEV1, ratio, predicted percentages, post-bronchodilator change
+    outputs: pattern, severity grade and reversibility statement
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=spirometry-report; "FEV1/FVC 0.58, FEV1 52% predicted, +14% and 220 mL after salbutamol"'
+    example_response: 'impression "Moderate obstructive defect with significant reversibility — asthma."'
+
+  - id: sleep-study-summary
+    purpose: Summarise a polysomnography study with severity and the therapy it mandates.
+    inputs: AHI, minimum saturation, arousals, sleep efficiency, position and REM dependence
+    outputs: severity classification with titration or device recommendation
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=sleep-study-summary; "AHI 41, nadir SpO2 72%, 82% of events REM-related"'
+    example_response: 'impression "Severe OSA, predominant desaturation in REM. CPAP therapy indicated."'
+
+  - id: eeg-report
+    purpose: Draft an EEG report from the background activity and any recorded events.
+    inputs: state, background rhythm, reactivity, epileptiform findings, clinical events
+    outputs: an interpretation with the pattern that answers the referral question
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=eeg-report; "left temporal periodic lateralised epileptiform discharges, slow background"'
+    example_response: 'impression "Left temporal LPDs with dysfunction — correlate with acute pathology."'
+
+  # ---------------------------------------------------------------- 20. oncology and multidisciplinary tumour board (5)
+  - id: tumour-board-summary
+    purpose: Produce the multidisciplinary tumour board record from the case presentation.
+    inputs: pathology, imaging stage, performance status, options discussed, consensus decision
+    outputs: a dated board summary with the agreed plan and who carries it out
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: beta
+    blocked_by: ADR-0005 — a board decision binds several clinicians to one plan; the record must show who decided, platform-side, not in a note
+    example_request: 'skill=tumour-board-summary; "rectal CA cT3N1, consensus neoadjuvant chemoradiotherapy"'
+    example_response: 'impression "Plan: long-course chemoradiotherapy, restage 8 weeks, then surgery."'
+
+  - id: tumour-staging-note
+    purpose: Assemble a TNM staging note from pathology, imaging and clinical findings.
+    inputs: primary tumour descriptors, nodal status, metastatic findings, histology grade
+    outputs: a staging line with each component traced to the finding that supports it
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=tumour-staging-note; "pT3 N1 2/18, no distant disease on CT chest abdomen"'
+    example_response: 'impression "Stage IIIB (pT3 N1b M0), moderately differentiated."'
+
+  - id: oncology-treatment-plan
+    purpose: Draft the staged treatment plan a patient and their family can be talked through.
+    inputs: stage, performance status, comorbidity, protocol options, intended intent
+    outputs: a sequenced plan with the monitoring and the decision points inside it
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: beta
+    blocked_by: ADR-0005 — a treatment plan is the clinical act that consent attaches to
+    example_request: 'skill=oncology-treatment-plan; "stage IIIB rectal CA, CRT then TME, adjuvant CAPOX"'
+    example_response: 'impression "Plan sequenced with restaging and toxicity checkpoints named."'
+
+  - id: survivorship-care-plan
+    purpose: Produce the end-of-treatment survivorship plan with surveillance and late effects.
+    inputs: treatment received, date completed, residual toxicities, recurrence risk
+    outputs: a surveillance schedule, late-effect list and the who-calls-whom instruction
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=survivorship-care-plan; "completed chemoRT and surgery, grade 2 neuropathy"'
+    example_response: 'impression "CT surveillance 3-monthly for 2 years; CEA; neuropathy review; bowel function clinic."'
+
+  - id: palliative-care-plan
+    purpose: Draft a symptom-control and goals-of-care plan for advanced disease.
+    inputs: symptom burden, current medicines, functional status, patient wishes, carer situation
+    outputs: a symptom plan with escalation thresholds and the goals-of-care statement
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=palliative-care-plan; "breast CA with bone and liver metastases, pain 7/10, dyspnoea"'
+    example_response: 'impression "Opioid rotation with breakthrough doses; breathlessness pathway; DNAR discussion offered."'
+
+  # ---------------------------------------------------------------- 21. medication safety (5)
+  - id: drug-interaction-review
+    purpose: Review a medication list for interactions that change what is prescribed today.
+    inputs: current medicines with doses, renal and hepatic function, allergies
+    outputs: interaction list graded by consequence, with the substitution proposed
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=drug-interaction-review; "warfarin, clarithromycin started yesterday, carbamazepine"'
+    example_response: 'impression "Major: clarithromycin raises INR — change antibiotic or reduce and check INR in 48 h."'
+
+  - id: renal-and-hepatic-dose-adjustment
+    purpose: Adjust a dose to measured organ function and say what to monitor afterwards.
+    inputs: drug, eGFR or Child-Pugh class, weight, indication, planned duration
+    outputs: the adjusted dose, the interval, and the monitoring rule
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=renal-and-hepatic-dose-adjustment; "piperacillin-tazobactam, eGFR 22"'
+    example_response: 'impression "Reduce to 4.5 g every 8 hours; reassess daily; review levels if available."'
+
+  - id: high-alert-medication-check
+    purpose: Run the double-check required before a high-alert drug is given.
+    inputs: drug, concentration, dose, route, rate, indication, second checker
+    outputs: a checklist result with any field that could not be verified left unresolved
+    risk: critical
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=high-alert-medication-check; "insulin infusion 50 units in 50 mL, protocol rate 4 mL/h"'
+    example_response: 'impression "Concentration and rate verified; second checker field blank — do not start until signed."'
+
+  - id: antimicrobial-stewardship-review
+    purpose: Review an antimicrobial prescription for indication, spectrum, dose and duration.
+    inputs: organism and sensitivities, site, current regimen, day of therapy
+    outputs: continue, narrow, escalate or stop, with the day the decision must be revisited
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=antimicrobial-stewardship-review; "day 5 pip-tazo, culture E coli sensitive to ceftriaxone"'
+    example_response: 'impression "De-escalate to ceftriaxone; stop date day 7; review at 48 hours."'
+
+  - id: pregnancy-and-lactation-drug-safety
+    purpose: Assess a prescribed or requested medicine against pregnancy and lactation.
+    inputs: gestation or lactation status, drug and dose, indication, alternatives considered
+    outputs: a category-consistent recommendation with the counselling point for the clinician
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: beta
+    blocked_by: ADR-0005 — this output is given to a pregnant patient as advice; a platform-verifiable signature is required before that
+    example_request: 'skill=pregnancy-and-lactation-drug-safety; "valproate, 9 weeks pregnant, epilepsy controlled"'
+    example_response: 'impression "Do not stop abruptly — neurology same week; folate high dose; documented risk counselling."'
+
+  # ---------------------------------------------------------------- 22. clinical documentation and medicolegal (5)
+  - id: discharge-summary
+    purpose: Draft the discharge summary that carries an admission into the community.
+    inputs: diagnosis list, procedures, medicines at discharge, investigations, follow-up plan
+    outputs: a complete summary with any missing section flagged as a gap, not a blank
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=discharge-summary; "day 6 heart failure decompensation, diuresed 4 L, GDMT started"'
+    example_response: 'impression "Discharge summary drafted; weight and diuretic plan included; echo follow-up date missing."'
+
+  - id: referral-letter
+    purpose: Turn a clinician's request into a referral letter that tells the specialist what to do.
+    inputs: reason for referral, relevant history, examination, current medicines, question asked
+    outputs: a one-page letter whose final line is the explicit question
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=referral-letter; "progressive dysphagia, lost 8 kg, question: is there a surgical lesion"'
+    example_response: 'impression "Referred to surgical gastroenterology for urgent upper GI endoscopy."'
+
+  - id: medicolegal-case-summary
+    purpose: Assemble the medico-legal record for a case that may be examined or litigated.
+    inputs: presentation time, consent history, findings, treatment, medico-legal formalities
+    outputs: a chronologically complete record with every gap in the chain of custody named
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: beta
+    blocked_by: ADR-0003 — an evidentiary record needs retention, immutability and export the platform cannot yet guarantee
+    example_request: 'skill=medicolegal-case-summary; "assault, 02:10 presentation, consent for examination withheld"'
+    example_response: 'impression "Chronology drafted; injury description with body map; consent gap recorded; police intimation pending."'
+
+  - id: medical-certification-draft
+    purpose: Draft a certificate of illness, fitness or cause of death in the statutory format.
+    inputs: statutory fields, clinical basis, examination or treatment facts
+    outputs: the certificate text with the clinician's declaration separated from the AI draft
+    risk: critical
+    approval: required
+    audit: true
+    capability: reasoning
+    status: beta
+    blocked_by: ADR-0005 and ADR-0003 — a certificate is a legal instrument; both the signature and its retention are platform obligations
+    example_request: 'skill=medical-certification-draft; "cause of death, sepsis from decubitus ulcer, 3 weeks"'
+    example_response: 'impression "Part I sepsis, underlying decubitus ulcer; opinion fields left for the signing doctor."'
+
+  - id: fitness-for-duty-assessment
+    purpose: Assess fitness for a specific duty — driving, machinery, diving, flying — against findings.
+    inputs: condition, treatment, duty class, statutory standard cited
+    outputs: fit, fit with restriction or unfit, with the standard that decided it
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=fitness-for-duty-assessment; "epilepsy seizure-free 10 months, question: private driving licence"'
+    example_response: 'impression "Not fit to drive — seizure-free interval short of standard. Clinician to confirm."'
+
+  # ---------------------------------------------------------------- 23. coding, billing and quality (5)
+  - id: icd10-coding-suggestion
+    purpose: Suggest diagnosis codes from a completed clinical document, with the evidence quoted.
+    inputs: final diagnosis list, procedure list, discharge summary text
+    outputs: candidate codes each tied to the sentence that supports it, and any ambiguous case
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=icd10-coding-suggestion; "type 2 diabetes with CKD stage 4, documented"'
+    example_response: 'impression "E11.22 suggested — supports combination coding; verify CKD stage is documented."'
+
+  - id: procedure-coding-suggestion
+    purpose: Suggest procedure codes for operations and interventions performed.
+    inputs: operative notes, approach, laterality, implants, anesthesia time
+    outputs: code candidates plus any component that is bundled and should not be billed alone
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=procedure-coding-suggestion; "laparoscopic cholecystectomy with intraoperative cholangiogram"'
+    example_response: 'impression "Primary code plus cholangiogram add-on; unbundling risk flagged."'
+
+  - id: prior-authorisation-letter
+    purpose: Draft the clinical justification an insurer or scheme asks for before approving a treatment.
+    inputs: requested item, diagnosis, prior lines tried, guideline or evidence cited, urgency
+    outputs: a justification letter with each assertion traceable to the record
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=prior-authorisation-letter; "tocilizumab in rheumatoid arthritis after two DMARD failures"'
+    example_response: 'impression "Justification drafted; prior failures and DAS28 values listed with dates."'
+
+  - id: claim-appeal-draft
+    purpose: Draft an appeal against a denied or reduced claim on clinical grounds.
+    inputs: denial reason, billed items, record excerpts, policy clause quoted by the payer
+    outputs: an appeal that answers the payer clause point by point with evidence
+    risk: moderate
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=claim-appeal-draft; "denied as not medically necessary; patient hypoxaemic on day 2"'
+    example_response: 'impression "Appeal cites documented hypoxaemia and observed-level criteria; attachments listed."'
+
+  - id: quality-indicator-audit
+    purpose: Score a case against a quality indicator and name the record gap when it cannot be scored.
+    inputs: indicator definition, case record, dates and thresholds
+    outputs: met or not met with the specific data element that decided it
+    risk: low
+    approval: not-required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=quality-indicator-audit; "door-to-balloon target, cath lab arrival and wire times"'
+    example_response: 'impression "Not met: 96 minutes; decision element is the ECG-to-arrival interval."'
+
+  # ---------------------------------------------------------------- 24. patient-facing communication (5)
+  - id: patient-explainer
+    purpose: Explain a diagnosis or result to a patient in language they can act on.
+    inputs: clinical result, patient reading level and language, questions they asked
+    outputs: a short explanation with the numbers kept, the jargon removed, and no advice invented
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=patient-explainer; "HbA1c 72 mmol/mol, patient asked whether insulin is coming"'
+    example_response: 'impression "Explains the number in percent terms, what changed, and what the plan tests."'
+
+  - id: plain-language-report
+    purpose: Convert a signed clinical report into a patient-readable version of the same findings.
+    inputs: signed report text, patient language preference
+    outputs: a readable version that never adds or removes a clinical fact
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=plain-language-report; "signed MRI: disc extrusion compressing the S1 root"'
+    example_response: 'impression "The disc in your lower back is pressing on the nerve that goes down your left leg."'
+
+  - id: pre-procedure-instructions
+    purpose: Send the preparation instructions a specific procedure requires.
+    inputs: procedure, sedation type, comorbidity and medicines, appointment time
+    outputs: instruction sheet with the stop-times for medicines and the arrival deadline
+    risk: moderate
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=pre-procedure-instructions; "colonoscopy with sedation, on lisinopril and metformin"'
+    example_response: 'impression "Bowel prep schedule, nil by mouth from 06:00, metformin held, escort required."'
+
+  - id: fasting-and-medication-instruction
+    purpose: Give the fasting interval and morning-medication decision for an anaesthetic.
+    inputs: procedure time, age, comorbidity, medicine list, pregnancy status
+    outputs: the fasting clock and a per-drug take-or-hold line
+    risk: high
+    approval: required
+    audit: true
+    capability: fast
+    status: alpha
+    example_request: 'skill=fasting-and-medication-instruction; "10:30 list, on ramipril, ferrous sulphate, asthma inhaler"'
+    example_response: 'impression "Clear fluids until 08:30; ramipril held; inhaler and iron as usual."'
+
+  - id: appointment-preparation-brief
+    purpose: Prepare a patient so a consultation is useful the first time.
+    inputs: specialty, what will be examined, records to bring, expected duration
+    outputs: a short brief listing what to bring and what will happen
+    risk: low
+    approval: not-required
+    audit: false
+    capability: fast
+    status: alpha
+    example_request: 'skill=appointment-preparation-brief; "neurology follow-up, bring seizure diary and past scans"'
+    example_response: 'impression "Bring the diary, all imaging discs, current medicine strips; allow 40 minutes."'
+
+  # ---------------------------------------------------------------- 25. knowledge and grounding (3)
+  - id: guideline-citation
+    purpose: Cite the local or national guideline that a clinical statement relies on.
+    inputs: statement to ground, guideline corpus available in the installation
+    outputs: the citation with its section, or a refusal when the corpus holds nothing
+    risk: moderate
+    approval: required
+    audit: true
+    capability: default
+    status: blocked
+    blocked_by: ADR-0006 and SPEC-08-06 — no retrieval or citation capability exists; services/knowledge and Qdrant are present in compose but nothing reads them
+    example_request: 'skill=guideline-citation; "statement: offer thrombectomy up to 24 hours in selected patients"'
+    example_response: 'impression "Cited: local stroke pathway section 4.2; no external corpus consulted."'
+
+  - id: prior-study-comparison
+    purpose: Compare a study against the named prior study and describe only what changed.
+    inputs: current findings, prior report text, interval since it
+    outputs: a change statement — resolved, stable, new, progressed — per lesion
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=prior-study-comparison; "prior 24 mm liver lesion; now 18 mm; new 6 mm lesion segment 6"'
+    example_response: 'impression "Target lesion responded 24 to 18 mm; one new 6 mm lesion — mixed response."'
+
+  - id: differential-diagnosis-check
+    purpose: Test a draft impression against alternatives the findings could equally support.
+    inputs: findings, impression, patient context
+    outputs: named alternatives with the finding that argues for each and what would settle it
+    risk: high
+    approval: required
+    audit: true
+    capability: reasoning
+    status: alpha
+    example_request: 'skill=differential-diagnosis-check; "ring-enhancing lesion, 3.1 cm, left frontal, immunocompetent"'
+    example_response: 'impression "Differential also includes abscess and metastasis; suggest diffusion and chest imaging."'
+
+  # ---------------------------------------------------------------- 26. analytics and operations (3)
+  - id: cohort-extraction
+    purpose: Build a de-identified patient cohort for audit, service planning or research.
+    inputs: inclusion and exclusion criteria as clinical concepts, date range
+    outputs: counts and a de-identified extract, with the criterion each patient met
+    risk: moderate
+    approval: required
+    audit: true
+    capability: reasoning
+    status: blocked
+    blocked_by: ADR-0007 — no Hospital or Patient Context identifier exists, so a cohort cannot be assembled without inventing one; DOMAIN_MODEL Q1 and Q2
+    example_request: 'skill=cohort-extraction; "all ischaemic strokes thrombolysed in 2026, by door-to-needle time"'
+    example_response: 'impression "62 cases, door-to-needle median 41 min; identifiers withheld from export."'
+
+  - id: de-identification-review
+    purpose: Check a proposed data export for identifiers and free-text leakage before it leaves the hospital.
+    inputs: the dataset or text, the recipient purpose, allowed identifier list
+    outputs: a pass or a list of every field and sentence that must be removed
+    risk: high
+    approval: required
+    audit: true
+    capability: default
+    status: alpha
+    example_request: 'skill=de-identification-review; "research extract, recipient outside the hospital"'
+    example_response: 'impression "Fail: 3 free-text notes contain names; dates precise to the day in 41 rows."'
+
+  - id: turnaround-time-brief
+    purpose: Explain why a reporting queue is slow, from the timestamps that exist.
+    inputs: study timestamps by stage, reporting list, modifier and addendum dates
+    outputs: the stage carrying the delay, with the count of studies stuck in it
+    risk: low
+    approval: not-required
+    audit: false
+    capability: fast
+    status: alpha
+    example_request: 'skill=turnaround-time-brief; "week 40, MRI queue median 3 days"'
+    example_response: 'impression "Delay sits between scan and list allocation, not in reporting: 21 studies unallocated."'
+

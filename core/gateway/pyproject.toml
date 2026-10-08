@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "futurekind-gateway"
+description = "FutureKind Gateway — the single entry point for every AI request in the FutureKind platform."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "Apache-2.0" }
+# One declaration: [tool.hatch.version] below reads __version__ out of the package,
+# so the number the wheel carries, the number GET /health reports and the number in
+# the served OpenAPI document are the same number. configs/futurekind.yaml names the
+# release line (Genesis) and holds no version, because nothing reads it.
+dynamic = ["version"]
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn>=0.32,<1",
+    "pydantic>=2.7,<3",
+    "PyYAML>=6,<7",
+    "prometheus-client>=0.20,<1",
+    # Not a test dependency: LiteLLMProvider talks to LiteLLM over it, so an
+    # installed Gateway cannot work without it.
+    "httpx>=0.27,<1",
+]
+
+[project.scripts]
+futurekind-gateway = "futurekind_gateway.main:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.hatch.version]
+path = "src/futurekind_gateway/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/futurekind_gateway"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+addopts = "-q --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM", "ASYNC"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B008"]
