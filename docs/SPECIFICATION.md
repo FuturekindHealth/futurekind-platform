@@ -231,8 +231,8 @@ layers is the specification; five requires an ADR.
 file, and readiness SHALL gate traffic on it. `[BUILT]` in the manifest since Sprint
 6: `compose.yaml` declares it, `core/gateway/Dockerfile` healthchecks
 `/health/ready` rather than `/health`, and `litellm` is a healthy dependency rather
-than a peer. Unverified: neither file has been executed — no Docker daemon exists in
-this development environment.
+than a peer. Built and interpolated by CI on every push; never executed against a running
+stack, because no Docker daemon exists in this development environment.
 
 **SPEC-05-02.** A request SHALL pass these stages in this order, and no stage after
 the first failure shall execute:
@@ -904,7 +904,7 @@ anything LiteLLM already owns.
 | Workflow engine | SPEC-08-07 | FutureKind or CARE ERP owns the workflow (`DOMAIN_MODEL.md` Q5) | Platform owner |
 | Model ids leaving the catalogue | SPEC-07-02, 15-01 | ADR-0002 step 3 authorisation only — the integration and the startup check it was waiting on now exist | Platform owner |
 | `retryable` telling the truth on three codes | SPEC-14-02 | A decision to change a frozen field's semantics for `provider_authentication_failed`, `provider_request_rejected`, `provider_protocol_error` | Platform owner |
-| The deployed stack proven on a hospital machine | SPEC-02-01, 05-01, 11-02 | Nothing — `docker compose up` has never been run here, so `core/gateway/Dockerfile` and the two new services are unexecuted | Hospital IT |
+| The deployed stack proven on a hospital machine | SPEC-02-01, 05-01, 11-02 | CI builds the image and validates the compose tree, but `docker compose up` has never been run here, so the booted stack and its healthcheck chain are unexecuted | Hospital IT |
 | A second Provider, or the Gateway doing retries | SPEC-12-03, 06-12, 12-05 | Constitution P16 — refused until an ADR argues against it | No one; it is a boundary |
 | Multi-hospital data paths, cross-site analytics | Constitution P14 | A constitutional amendment, not an ADR | Platform owner only |
 | Streaming semantics | SPEC-15-03 | An ADR fixing cancellation/audit behaviour | Services |
@@ -931,8 +931,8 @@ in `core/gateway/tests/`, passing with `ruff check` clean as of Sprint 6
 (2026-10-07). Of those, `test_end_to_end.py` is the part that makes the phrase mean
 something: it starts the production Gateway and a stub LiteLLM on loopback ports and
 asserts on bytes that crossed a real socket, so the request path is not proved only
-inside one process. What the suite cannot prove is the container: no Docker daemon
-exists in this development environment, so `core/gateway/Dockerfile` and the three
-`compose.yaml` services are written and parsed but never executed. Where this file
+inside one process. What the suite cannot prove is the booted stack: CI builds
+`core/gateway/Dockerfile` and interpolates `compose.yaml` on every push, but no Docker
+daemon exists here, so no container has ever started in this environment. Where this file
 says `[PARTIAL]`, `[PLANNED]`, `[BLOCKED]` or `[PROVISIONAL]`, it is deliberately not
 a claim about today.

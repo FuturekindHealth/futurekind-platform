@@ -207,10 +207,12 @@ truth at this stage:
 - **Latency is measured on one machine.** The best number obtained so far is
   **3.9 tokens/s** on the development host — which is why the roadmap puts timing on
   the hospital's own hardware *before* building the interaction that depends on it.
-- **The container path is unverified.** No Docker daemon was available on any machine
-  used to write this, so `compose.yaml` and `core/gateway/Dockerfile` are validated by
-  parsing and by reading upstream documentation, not by booting. The Gateway itself is
-  proved over real sockets in `test_end_to_end.py`.
+- **The container path is built, not booted.** CI builds `core/gateway/Dockerfile`
+  and interpolates `compose.yaml` on every push, so the packaging claims are
+  checked. What no machine here has done is run the stack: there is no Docker
+  daemon on any development host, so the healthcheck chain, the mount paths and
+  the startup order are unexecuted. The Gateway itself is proved over real
+  sockets in `test_end_to_end.py`.
 - **No PHI has been processed by any of it,** and until audit retention and per-user
   authentication exist, that is the correct state for a deployment to be in.
 

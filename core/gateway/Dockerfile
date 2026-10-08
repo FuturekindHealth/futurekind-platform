@@ -6,10 +6,14 @@
 # `docs/adr/ADR-0001-Local-First-AI.md` puts the weights on the hospital's own
 # hardware. Everything the operator may change is mounted, not baked.
 #
-# Nothing here has been built or run: this repository has no Docker daemon
-# available to it (verified 2026-10-07 — `command -v docker` finds nothing on
-# either side of WSL). The Gateway itself is proved over real sockets in
-# core/gateway/tests/test_end_to_end.py; what remains unverified is this file.
+# Who checks this file: CI builds it on every push (`.github/workflows/ci.yml`,
+# "The Gateway image actually builds") and starts one container long enough to
+# import the package and assert /app/models.yaml exists. Nothing here has ever
+# served a request: the development environment has no Docker daemon (verified
+# 2026-10-07 — `command -v docker` finds nothing on either side of WSL), so a real
+# boot is the operator's first deployment, not a claim this repository can make.
+# The Gateway's behaviour over real sockets is proved in
+# core/gateway/tests/test_end_to_end.py; the healthcheck below has never run.
 
 FROM python:3.12-slim
 

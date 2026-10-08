@@ -143,6 +143,20 @@ jobs:
           echo "compose.yaml is valid and one authoritative tree"
           test ! -d compose || { echo "a second compose tree reappeared"; exit 1; }
 
+      - name: The Gateway image actually builds
+        # `compose config` proves the tree; nothing else in this repository ever
+        # executes core/gateway/Dockerfile, because no Docker daemon exists in this
+        # development environment. Building it here is what makes the Dockerfile's
+        # claims testable rather than asserted: the wheel installs from the copied
+        # metadata, `futurekind-gateway` resolves as an entrypoint, and the paths it
+        # says compose will mount read-only exist at the locations the Gateway reads.
+        # Build only — no container is started, so this proves packaging, not
+        # runtime behaviour. That is proved over real sockets in the Gateway suite.
+        run: |
+          docker build -t fk-gateway-image-check core/gateway
+          docker run --rm --entrypoint python fk-gateway-image-check -c \
+            "import futurekind_gateway, pathlib; print(futurekind_gateway.__version__); assert pathlib.Path('/app/models.yaml').is_file()"
+
       - name: The doctor script is POSIX shell
         run: sh -n scripts/doctor/check-ai.sh
 
