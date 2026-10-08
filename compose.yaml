@@ -68,8 +68,13 @@ services:
     env_file:
       - .env
 
-    ports:
-      - "4000:4000"
+    # No published port. This is the change that makes the stated architecture true:
+    # docs/ARCHITECTURE.md:106 says all AI traffic passes through the Gateway, and a
+    # host address an application can reach is an entry point. LiteLLM stays
+    # reachable from the futurekind network by fk-gateway, and from the host only
+    # through `docker compose exec litellm ...` for diagnosis.
+    expose:
+      - "4000"
 
     depends_on:
       postgres:
@@ -85,7 +90,81 @@ services:
 
     networks:
       - futurekind
-    
+
+  gateway:
+    build:
+      context: ./core/gateway
+
+    image: futurekind/gateway:0.1.0
+
+    container_name: fk-gateway
+
+    restart: unless-stopped
+
+    profiles:
+      - ai
+
+    # Only what this service needs. `env_file: .env` would hand a process that sees
+    # AI traffic the PostgreSQL password as well, and docs/ARCHITECTURE.md:196-198
+    # is the rule that says it must not have it. Compose still interpolates
+    # ${...} from .env without injecting the rest.
+    environment:
+      FK_GATEWAY_MODELS_PATH: /app/models.yaml
+      FK_GATEWAY_LITELLM_CONFIG: /app/configs/litellm/config.yaml
+      FK_GATEWAY_LITELLM_BASE_URL: http://fk-litellm:4000
+      FK_GATEWAY_LITELLM_API_KEY: ${LITELLM_MASTER_KEY}
+      FK_GATEWAY_API_KEYS: ${FK_GATEWAY_API_KEYS}
+      FK_GATEWAY_REQUIRE_AUTH: "true"
+      TZ: ${TZ}
+
+    volumes:
+      # Mounted rather than baked: a change to a clinical routing table is an
+      # operator edit and a restart, never an image rebuild.
+      - ./core/gateway/models.yaml:/app/models.yaml:ro
+      - ./configs/litellm/config.yaml:/app/configs/litellm/config.yaml:ro
+
+    ports:
+      - "8100:8100"
+
+    depends_on:
+      litellm:
+        condition: service_healthy
+
+    networks:
+      - futurekind
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+
+    container_name: fk-openwebui
+
+    restart: unless-stopped
+
+    profiles:
+      - interface
+
+    environment:
+      # The interface reaches the platform through the Gateway's OpenAI-compatible
+      # door and through nothing else. Pointing this at fk-litellm:4000 would put
+      # clinical traffic outside every rule the platform says it owns.
+      # Verified against open-webui's own config.py: OPENAI_API_BASE_URL,
+      # OPENAI_API_KEY, ENABLE_OPENAI_API, ENABLE_OLLAMA_API.
+      OPENAI_API_BASE_URL: http://fk-gateway:8100/v1
+      OPENAI_API_KEY: ${FK_GATEWAY_API_KEYS}
+      ENABLE_OPENAI_API: "true"
+      ENABLE_OLLAMA_API: "false"
+      WEBUI_SECRET_KEY: ${OPENWEBUI_SECRET_KEY}
+      TZ: ${TZ}
+
+    volumes:
+      - ${FK_RUNTIME}/openwebui:/app/backend/data
+
+    ports:
+      - "3000:8080"
+
+    networks:
+      - futurekind
+
   qdrant:
     image: qdrant/qdrant:v1.15.4
     container_name: fk-qdrant
