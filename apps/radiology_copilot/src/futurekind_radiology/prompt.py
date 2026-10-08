@@ -1,10 +1,15 @@
 """The prompt, and the version of it a report can be traced back to.
 
-The output contract is a strict JSON object with five keys, and nothing else.
-That is a clinical decision as much as a parsing one: the sections are the ones a
+The output contract is a strict JSON object with five keys, and nothing else. That
+is a clinical decision as much as a parsing one: the sections are the ones a
 radiologist signs, so a model that answers in flowing prose has not produced a
 draft even when it produced correct medicine — it has produced something a
 reviewer cannot check section by section.
+
+The authority for this text is `docs/product/PROMPT_LIBRARY.md` §1, which carries
+the same prompt verbatim and the seven clauses every prompt in this library must
+carry. Changing one without the other is the fork this file's existence is meant
+to prevent.
 
 What is *not* here matters too. ``genesis/report_style.md`` and
 ``agents/radiology/style-guide.md`` were empty placeholders and are deleted from this
@@ -24,9 +29,13 @@ from .submission import StudySubmission
 
 #: Bump when the wording below changes, so a stored report says which prompt
 #: produced it. Provenance is not only about which model answered (P8).
-PROMPT_VERSION = "radiology-report-draft/0.2.0"
+#:
+#: 0.3.0 (Sprint 9) adds the `follow_up` key and states the rule that a number is
+#: the clinician's, not the model's. 0.2.0 made the clinical indication
+#: non-model-owned after a live run rewrote a referrer's question.
+PROMPT_VERSION = "radiology-report-draft/0.3.0"
 
-#: The four sections the model writes. The clinical indication is not among them:
+#: The five sections the model writes. The clinical indication is not among them:
 #: it is the referrer's question, recorded from the submission, and a model that
 #: restates it has been given the chance to change it.
 REPORT_SECTIONS = MODEL_SECTION_KEYS
@@ -39,10 +48,16 @@ could reach a patient. So:
 
 - Write only what the supplied observations support. Do not add a finding, a
   measurement, a sign or a diagnosis that was not described.
+- Every size, count and index in your answer must appear in the observations or in
+  a previous report supplied below. Never state a number of your own, and never
+  round a described lesion into a measured one.
 - Carry every observation the clinician dictated into your findings section, in
   report prose. Dropping one is as dangerous as inventing one.
 - If the observations are incomplete, negative or uncertain, say so in the
   section that owns it rather than filling the gap.
+- Describe only what this study shows. Do not state that something is unchanged,
+  resolved, new or stable compared with an earlier scan unless that earlier report
+  is supplied below.
 - If the technique was not supplied, write "Technique not provided." in the
   technique section. Do not name a scanner, a sequence or a contrast protocol
   that was not given.
@@ -52,15 +67,41 @@ could reach a patient. So:
 - Use plain clinical prose inside each section. No markdown, no bullet symbols,
   no headings.
 - Write the impression as the clinical conclusion, not a restatement of the
-  findings.
-- If there is genuinely nothing to recommend, write "None." in the
-  recommendations section. Do not leave it empty and do not omit it.
+  findings. A finding the observations hedge as possible, subtle or uncertain stays
+  hedged in the impression; do not settle it.
+- Recommendations are what to do now. Follow-up is when to look again, and what
+  with. Keep them apart, because a surveillance interval buried in a paragraph of
+  referrals is an interval nobody books.
+- If there is genuinely nothing to say in a section, write "None." there. Do not
+  leave it empty and do not omit it.
 
 Reply with one JSON object and nothing outside it: no preamble, no explanation
-after the closing brace. It must contain exactly these four keys, each with a
+after the closing brace. It must contain exactly these five keys, each with a
 string value:
 
 {sections}"""
+
+
+def _prior_block(submission: StudySubmission) -> str:
+    """The earlier reports, or the explicit statement that there are none.
+
+    Both halves matter. A supplied prior is the only legitimate source of a
+    comparison, and the absence of one has to be *said* to the model — silence
+    reads as permission, and "unchanged from prior" in a report nobody compared is
+    the invention the quality check would later have to refuse.
+    """
+    if not submission.previous_reports:
+        return (
+            "Previous reports: none supplied. There is nothing here to compare against, so "
+            "describe only what this study shows."
+        )
+    lines = ["Previous reports supplied for comparison:"]
+    for prior in submission.previous_reports:
+        lines += [
+            f"— Reported {prior.reported_on}: {prior.modality} {prior.study}",
+            prior.report,
+        ]
+    return "\n".join(lines)
 
 
 def _user_prompt(submission: StudySubmission) -> str:
@@ -75,11 +116,13 @@ Clinical indication (already recorded — context for you, not yours to rewrite)
 {submission.clinical_indication}
 Technique: {technique}
 
+{_prior_block(submission)}
+
 Observations dictated by the reporting clinician:
 {submission.findings}
 
 Draft the structured report for this study: findings, impression, recommendations,
-and the technique line only if it was not supplied above."""
+follow-up, and the technique line only if it was not supplied above."""
 
 
 def build_messages(

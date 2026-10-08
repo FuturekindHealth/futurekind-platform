@@ -133,5 +133,8 @@ def test_no_infrastructure_name_can_enter_the_prompt() -> None:
 
 
 def test_the_prompt_is_versioned_so_a_report_can_be_traced_to_it() -> None:
-    assert PROMPT_VERSION == "radiology-report-draft/0.2.0"
+    # 0.3.0: the follow-up section, the number-is-the-clinician's rule, and the
+    # explicit "no priors supplied" statement. docs/product/PROMPT_LIBRARY.md §1
+    # carries the same text, and a bump here without a bump there is a fork.
+    assert PROMPT_VERSION == "radiology-report-draft/0.3.0"
     assert PROMPT_VERSION.count(".") == 2
