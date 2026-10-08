@@ -19,7 +19,7 @@ These are not preferences. Four are constitutional and one is arithmetic.
 | Local-first is the default posture, not an option | P7, `../CONSTITUTION.md:214-216`, `:47-48` | The customer owns the hardware. There is no hosted inference to resell |
 | Federated learning, cross-site benchmarks and vendor-side dashboards are forbidden until the constitution is amended | `../CONSTITUTION.md:344-348` | **Multi-tenant SaaS analytics is not a product line; it is a constitutional amendment.** Nothing may be built or sold that presumes it |
 | One AI boundary, no model selection by a caller | P16 | The sale is governance, not model choice. A customer cannot "pick GPT" through us |
-| No cross-hospital data path; one installation per hospital | P14, and `../DOMAIN_MODEL.md:1267-1269` — *keep `Tenant` at zero occurrences* | Enterprise means **N installations with a contract**, not one database with N rows |
+| No cross-hospital data path; one installation per hospital | P14, and `../DOMAIN_MODEL.md:1270-1272` — *keep `Tenant` at zero occurrences* | Enterprise means **N installations with a contract**, not one database with N rows |
 | No per-token cost in the local default configuration | `../product/PRODUCT_SPECIFICATION.md:156-161` | Usage-based billing would require trusting the hospital's own count, which the specification already rejects (`:189-195`) |
 
 And the arithmetic: the platform is **Apache-2.0** (`LICENSE`, `README.md:234`). The code is not the
@@ -151,7 +151,7 @@ count.
    prohibition, restated commercially because it is where a sales conversation will drift
    (`../CONSTITUTION.md:344-348`).
 3. **No multi-tenant anything.** `Tenant` has zero occurrences and should keep none
-   (`../DOMAIN_MODEL.md:1267-1269`). Enterprise is N installations.
+   (`../DOMAIN_MODEL.md:1270-1272`). Enterprise is N installations.
 4. **No billing model that requires counting at our end** (`../product/PRODUCT_SPECIFICATION.md:189-195`).
 5. **No selling the golden set, the case files or any clinical text.** The evaluation corpus lives
    outside the repository by rule, and the phrase tables and case files have never held real human

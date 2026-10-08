@@ -847,6 +847,9 @@ uses it is named, because a rename without a citation is a rumour.
 | Service that decides permission | **Gateway** | gateway (meaning LiteLLM), API, router | `ARCHITECTURE.md:54`; `configs/futurekind.yaml:40` — the collision this row recorded was fixed by Sprint 6 |
 | Layer that chooses the model | **LiteLLM** | Model Router, routing | `ARCHITECTURE.md:150`; `configs/futurekind.yaml:42` (`routing: LiteLLM`, Sprint 6) |
 | Software a clinician uses | **Application** | client, module, interface, app, caller | `ARCHITECTURE.md:32`; `CONTRIBUTING.md:33`; `configs/futurekind.yaml:44` |
+| Application that drafts a document | **Copilot** | assistant, bot, draft tool | `docs/product/PRODUCT_BIBLE.md` §2 — the only kind with a review-and-sign gate |
+| Application that arranges existing objects | **Surface** | dashboard, viewer, report screen | `docs/product/PRODUCT_BIBLE.md` §2. Its failure mode is a silent absence, not a wrong sentence |
+| Application that answers for the institution | **Console** | admin panel, MIS, analytics | `docs/product/PRODUCT_BIBLE.md` §2. Its failure mode is a metric nobody defined |
 | Identity in one request | **Caller** | user, key, client | `deps.py:67,122` |
 | Organisation owning the data | **Hospital** | organization, tenant, facility, site | `ADR-0001:54`; `configs/futurekind.yaml:14` |
 | Running instance | **Installation** | deployment, runtime | `configs/futurekind.yaml:24`; `deployment/`; `:56` |

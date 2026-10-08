@@ -316,3 +316,26 @@ version. A copy of a number in a prose document is a second place to be wrong.
 The rules in this document still bind the code that exists: one AI boundary, no model
 or provider selection from a caller, no prompt text in a log. A box that is absent is
 unbuilt, not permitted.
+
+---
+
+# The layer above this one
+
+The **Applications** box near the top of this file is the 2026 target list, and it is kept here
+because it is where the boundary rule was drawn: applications never speak to a model. It is not the
+product plan, and it must not be read as one — that would give this document an owner it does not
+have.
+
+The application family is owned by [`product/PRODUCT_BIBLE.md`](product/PRODUCT_BIBLE.md): fourteen
+applications in three kinds, each tested against four rules, with the merges and the refusals
+recorded. What each one calls, reads, writes and hands off is
+[`architecture/APPLICATION_MAP.md`](architecture/APPLICATION_MAP.md), whose first section is the
+contract this file's boundary makes possible — `SPEC-12-04`: a credential and a skill name, no
+platform change, never a LiteLLM key.
+
+Three invariants from this document bind every application above it, and none of them is
+negotiable by convenience: the application names a skill and never a model; the signed document
+lives in the hospital's system of record and not in the application; and the platform's silence
+about prompt content is a property of the whole stack, not of the Gateway alone. An application that
+would need a fifth layer, a new request field or a second AI boundary is not a new product — it is
+an amendment proposal, and `docs/SPECIFICATION.md` §17 is where such proposals are recorded.
