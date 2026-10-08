@@ -150,7 +150,7 @@ it, so nothing here is a second definition.
 | **Grounding checks** | Text-vs-text checks with two severities, and a confidence computed from them | `quality.py`, documented in `../ARCHITECTURE.md:261-262` | Built, nine checks; **radiology-specific**: the phrase and structure lists must be per-Agent before a second copilot uses them |
 | **Section ownership rule** | Which boxes a human may type in, decided by who wrote the text | `report.py::editable_section_keys`, `UI_UX.md` §4 | Built for radiology |
 | **Refusal and failure language** | One error envelope, one guidance table, plain words, manual path always live | `../design/UX_GUIDE.md` §5 | Pattern proven in radiology |
-| **Provenance block** | model, alias, prompt version, attempts, degraded, request id — attached to the document | `../SPECIFICATION.md:328` (§6.3) | Built |
+| **Provenance block** | model, alias, prompt version, attempts, degraded, request id — attached to the document | `SPEC-06-10` (`../SPECIFICATION.md:330-331`) | Built |
 | **Export and handoff** | text / markdown / json / print / clipboard into the system of record | `../design/DESIGN_SYSTEM.md` §7 | Built |
 | **Review instrument** | A session that measures the clinician rather than scoring the model, and a reading of the finished afternoon | `scripts/validation/dashboard.py`, `ROADMAP.md` §4b | Built for radiology |
 | **Design language** | Colour, type, density, shortcuts, icons, focus, modes | `../design/DESIGN_SYSTEM.md` | Design |

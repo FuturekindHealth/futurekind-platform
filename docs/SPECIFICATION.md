@@ -246,7 +246,7 @@ the first failure shall execute:
 6. record provenance and audit, then answer
 
 *Source:* Constitution P1, P2, P6, P16; implementation `GatewayService.handle` and
-nothing else. `[BUILT]` — 482 tests cover this path, and both doors (`POST /chat`
+nothing else. `[BUILT]` — the committed Gateway suite covers this path, and both doors (`POST /chat`
 and `POST /v1/chat/completions`) reach stage 3 through the same function, so a
 stage cannot be reordered for one transport without failing the other's tests.
 

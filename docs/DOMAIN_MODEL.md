@@ -718,7 +718,7 @@ already refuses the words without the referent — "unchanged from prior" with n
 **Owner.** The reporting clinician; it is the one object whose evidence is a second study.
 **Relationships.** Requires two **Studies** (or two time points of one measurement); supports or
 contradicts an **Observation**; the reason the Comparison Viewer exists as a screen
-(`docs/product/UI_UX.md:135`).
+(`docs/product/UI_UX.md:143`).
 **Careful.** A Comparison is not a field on a Report. A study with no available prior cannot hold
 one, and the product must say *no prior available* rather than leaving the sentence out.
 
@@ -866,7 +866,7 @@ uses it is named, because a rename without a citation is a rumour.
 | Advice with an owner and an interval | **FollowUp** | recall, review, recommendation | `apps/radiology_copilot/src/futurekind_radiology/report.py:48` (`follow_up`) |
 | Act performed on a patient | **Procedure** | operation, intervention, surgery | `docs/product/SKILL_LIBRARY.yaml:835` (`operative-note-draft`) |
 | Drug as recorded for a patient | **Medication** | drug, prescription, line | `docs/product/SKILL_LIBRARY.yaml:810` (`medication-reconciliation`) |
-| Work with an owner and a due condition | **Task** | action item, recall, TODO | *(no referent here; the ERP's `generateAiForTask` is an AI job — `docs/integration/AI_ENTRY_POINTS_CARE_ERP.md:79`)* |
+| Work with an owner and a due condition | **Task** | action item, recall, pending item | *(no referent here; the ERP's `generateAiForTask` is an AI job — `docs/integration/AI_ENTRY_POINTS_CARE_ERP.md:79`)* |
 | Proof a named person was told | **Notification** | alert, message, ping | `docs/product/SKILL_LIBRARY.yaml:129` (`radiology-critical-value-alert`) |
 | Statement across two studies or time points | **Comparison** | prior, old study, "unchanged" | `apps/radiology_copilot/src/futurekind_radiology/quality.py:336` |
 | Record of what was allowed | **Audit** | log, trail, telemetry | `ARCHITECTURE.md:56,118`; `service.py:316` |
