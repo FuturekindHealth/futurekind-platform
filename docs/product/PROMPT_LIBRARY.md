@@ -5,7 +5,7 @@ designs.** Say which is which, or the file becomes a list of intentions.
 
 | Specialty | Prompt id | Version | Where it lives | Runs today |
 | --- | --- | --- | --- | --- |
-| Radiology | `radiology-report-draft` | `0.3.0` | `apps/radiology_copilot/src/futurekind_radiology/prompt.py:36,43-82` | **Yes** |
+| Radiology | `radiology-report-draft` | `0.3.1` | `apps/radiology_copilot/src/futurekind_radiology/prompt.py:40,47-86` | **Yes** |
 | Pathology | `pathology-report-draft` | `0.1.0` | design only | No |
 | Acute medicine | `clinical-summary-draft` | `0.1.0` | design only | No |
 | Emergency | `ed-impression-draft` | `0.1.0` | design only | No |
@@ -57,16 +57,34 @@ style guide is a clinician's task and it is on the roadmap.
 
 ---
 
-## 1. Radiology — `radiology-report-draft/0.3.0` (running)
+## 1. Radiology — `radiology-report-draft/0.3.1` (running)
 
 **Purpose.** Turn one reporting clinician's dictated observations for one imaging study,
 plus any previous report the department supplies, into a sectioned draft a radiologist
 can review line by line, check against what they submitted, and sign.
 
+**Size, measured.** 2,280 characters of system rules and 614 characters of clinical turn
+for a study with a supplied technique — about 723 tokens per draft request at four
+characters per token, which is the arithmetic this repository can honestly do without a
+tokenizer in the image. 0.3.0 was 3,097 characters, so 203 came off; every one of them
+was a restatement, not a rule. `test_prompt.py` holds the ceiling and a check that no
+phrase in the contract appears twice, because a prompt that quietly grows is how a draft
+request stops fitting the deployment that runs it.
+
 **Skill and policy.** `radiology-report` → capability `reasoning` → alias `fk-reasoning` →
 `ollama/qwen3:14b`. Policy `{clinical_risk: high, approval_required: false,
 audit_required: true, allow_downgrade: false}`, ceiling 1024 completion tokens, 90 s
 timeout (`core/gateway/models.yaml:54-66`).
+
+**What changed in 0.3.1, and what did not.** Nothing was asked differently of the model.
+The same twelve rules are stated, each in one place: the technique rule had been said
+three times (system clause, the user turn's fallback value, and the closing line), the
+indication rule twice, and the closing line enumerated the five sections after the JSON
+contract had already listed them. Removing a restatement changes only which sentence a
+model reads the rule in — and the behavioural test for a prompt change is a model, which
+this machine does not have, so 0.3.1 is a reduction of what has to be read, not a claim
+about what will be produced. `docs/product/ROADMAP.md` §4.2 keeps the output comparison
+for the afternoon with a real deployment.
 
 **What changed in 0.3.0, and why it was not a free addition.** Sprint 9 asked for a
 report a radiologist can approve, and two things were missing from the output the brief
@@ -90,7 +108,7 @@ supported by its own inputs.
   trust the wrong figure. If a deployment returns `confidence` anyway, the application
   records it as an extra key and refuses to show it (`quality.py`).
 
-**System prompt** (verbatim from `prompt.py:43-82`; `{sections}` is filled with the five
+**System prompt** (verbatim from `prompt.py:47-86`; `{sections}` is filled with the five
 JSON keys at call time):
 
 ```text
@@ -101,10 +119,10 @@ before it is used, and a statement you add that is not in the observations below
 could reach a patient. So:
 
 - Write only what the supplied observations support. Do not add a finding, a
-  measurement, a sign or a diagnosis that was not described.
-- Every size, count and index in your answer must appear in the observations or in
-  a previous report supplied below. Never state a number of your own, and never
-  round a described lesion into a measured one.
+  sign or a diagnosis that was not described.
+- A size, count or index must appear in the observations or in a previous report
+  supplied below. Never state a number of your own, and never round a described
+  lesion into a measured one.
 - Carry every observation the clinician dictated into your findings section, in
   report prose. Dropping one is as dangerous as inventing one.
 - If the observations are incomplete, negative or uncertain, say so in the
@@ -112,9 +130,8 @@ could reach a patient. So:
 - Describe only what this study shows. Do not state that something is unchanged,
   resolved, new or stable compared with an earlier scan unless that earlier report
   is supplied below.
-- If the technique was not supplied, write "Technique not provided." in the
-  technique section. Do not name a scanner, a sequence or a contrast protocol
-  that was not given.
+- If the technique was not supplied, write "Technique not provided." Do not name a
+  scanner, a sequence or a contrast protocol that was not given.
 - The clinical indication has already been recorded by the clinician. Do not
   restate, summarise or reinterpret it.
 - Do not invent a patient name, number or any identifier that is not supplied.
@@ -136,13 +153,14 @@ string value:
 {sections}
 ```
 
-**User turn** (`prompt.py:85-126`): `Study`, `Modality`, the recorded `Clinical indication`
-labelled *"already recorded — context for you, not yours to rewrite"*, `Technique` (or the
-literal `Not supplied — write "Technique not provided."`), the previous reports under
-*"Previous reports supplied for comparison"* — or, when there are none, the sentence
-*"Previous reports: none supplied. There is nothing here to compare against, so describe
-only what this study shows."* — and the dictated observations under *"Observations dictated
-by the reporting clinician"*.
+**User turn** (`prompt.py:110-130`): `Study`, `Modality`, the recorded `Clinical indication`
+labelled *"the referrer's own words"*, `Technique` (or the literal `Not supplied`), the
+previous reports under *"Previous reports supplied for comparison"* — or, when there are
+none, the sentence *"Previous reports: none supplied. There is nothing here to compare
+against, so describe only what this study shows."* — and the dictated observations under
+*"Observations dictated by the reporting clinician"*, closing with *"Draft the structured
+report for this study."* The turn states no rules: it labels whose words each block is, and
+the instructions live in the system turn where a reader looks for them.
 
 **Constraints the application enforces, not just asks for.** A prompt instruction is a
 hope; these are code, and this list is the honest boundary between the two:
@@ -157,8 +175,8 @@ hope; these are code, and this list is the honest boundary between the two:
 | A supplied technique beats the model's | `technique_from` records `department` or `model`, and the department line wins |
 | Governance precedes parsing | `_check_governance` runs *before* `_parse` — an unaudited or degraded answer is refused even if its JSON is perfect |
 | Every number traces to the submission | `unsupported_measurement` blocks a size or count in findings/impression that appears nowhere in what was supplied, comparing whole numeric tokens — a dictated `19 mm` does not ground a drafted `9 mm`, and the `2` of `T2` grounds nothing; the same number in a plan section is advisory, because "review in 12 months" is not a measurement |
-| Nothing is dropped from the dictation | `dropped_observation` compares each dictated unit against the draft, on word stems so a plural is not an omission |
-| A comparison needs a prior | `invented_history` blocks comparison language when `previous_reports` is empty. The phrase list requires a comparison that *dates* the finding — bare `previously`, `better than` and `worse than` were removed after `scripts/validation/audit-checks.py` refused two correct golden reports for them (`ML-06` dates a "previously healed" fracture; `R-11` gives a differential that "fits this pattern better than atherosclerosis"). "Unchanged" still blocks, and so does "as previously described" |
+| Nothing is dropped from the dictation | `dropped_observation` compares each dictated unit against the draft, on word stems so a plural is not an omission. It fires on **0 of 100** faithful correct drafts (`audit-checks.py`, `check_load`), so its cost is borne only by a draft that really did summarise away an observation |
+| A comparison needs a prior | `invented_history` splits its phrases in two, because the words cannot be told apart by their own spelling. Phrases that name a time or name the earlier exam — `unchanged`, `no interval change`, `stable since`, `prior study`, `as previously described` — still block when `previous_reports` is empty. The five that are a comparison in one sentence and an anatomical one in the next — `compared with`, `compared to`, `in comparison`, `as before`, `resolved` — are advisory, with a message that says which reading it is. The split is measured: run over eleven ordinary dictated sentences, the single old list refused four of them wrongly ("hypointense compared with the surrounding white matter", "a small cortical lesion is poorly resolved"), and this check catches none of the 306 measurable `must_not_say` probes under either version. `ML-06` dates a "previously healed" fracture and `R-11` gives a differential that "fits this pattern better than atherosclerosis" — both still pass |
 | A hedge stays a hedge | `unsupported_certainty` blocks an absolute in the impression when the submitted text hedged — and does not fire on "cannot be excluded", which is a hedge |
 | Markup is refused | `format_breach` blocks markdown, bullets or headings inside a section |
 | No invented identities | `invented_identifier` blocks a title followed by a capitalised name, an identifier word (`MRN`, `accession no`, `UHID`) or a digit run of six or more, none of which was submitted. The name form is case-sensitive on purpose: the earlier case-insensitive version read "MR spectroscopy" as "Mr Spectroscopy" and refused three of the 100 golden reports for naming their own protocol |

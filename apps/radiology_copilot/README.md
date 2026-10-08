@@ -62,7 +62,7 @@ party in the room.
   "follow_up": "Repeat imaging after any interval change in consciousness …",
   "quality": {"status": "clear", "findings": [], "checks_run": ["dropped_observation", "…all nine, by name…"], "checked_at": "…", "scope": "…none of them has seen the images."},
   "confidence": {"level": "supported", "label": "Grounded in what was submitted", "reasons": ["…"], "basis": "…not a probability that the diagnosis is correct: no check here reads the images."},
-  "metadata": {"report_id": "fk-…", "dictated_findings": "…", "technique_from": "model", "compared_with": [], "profile": null, "prompt_version": "radiology-report-draft/0.3.0", "review": {"state": "pending_review"}},
+  "metadata": {"report_id": "fk-…", "dictated_findings": "…", "technique_from": "model", "compared_with": [], "profile": null, "prompt_version": "radiology-report-draft/0.3.1", "review": {"state": "pending_review"}},
   "model_provenance": {"model": "ollama/qwen3:14b", "provider": "litellm", "degraded": false, "…": "…"},
   "skill": {"name": "radiology-report", "capability": "reasoning"},
   "policy": {"clinical_risk": "high", "approval_required": false, "audit_required": true, "allow_downgrade": false}
@@ -124,12 +124,12 @@ exists rather than a prompt that asks the model to be careful.
 | --- | --- | --- |
 | `dropped_observation` | A dictated clause that never reaches the findings section | `block` |
 | `unsupported_measurement` | A number in the draft that is in neither the submission nor a supplied prior. Numbers are compared as whole tokens, so a dictated `19 mm` does not ground a drafted `9 mm`, and a digit inside `T2` grounds nothing | `block` in report prose, `advisory` in plan language ("repeat in 6 weeks") |
-| `invented_history` | "unchanged", "stable since", "resolved" — with no previous report supplied to compare against | `block` |
+| `invented_history` | Two lists, because the words cannot be told apart by their own spelling. Phrases that name a time or the earlier exam — "unchanged", "no interval change", "stable since", "prior study" — with no previous report supplied. The ambiguous five ("compared with", "compared to", "in comparison", "as before", "resolved") are shown, not refused: run over eleven ordinary dictated sentences they refused four correct ones, and the check catches none of the 306 hallucination probes either way | `block` for a phrase that dates the finding, `advisory` for one that might be comparing two structures |
 | `unsupported_certainty` | An absolute in the **impression** ("no evidence of", "normal") while the submitted text hedges (possible, subtle, uncertain) — a differential and a confirmation are different documents | `block` |
 | `format_breach` | Markdown, bullets or headings inside a section that will be printed | `block` |
 | `invented_identifier` | A name, MRN, UHID or accession number that was not supplied | `block` |
 | `unsupported_absence` | A negative this exam cannot answer — `"no pulmonary embolism"` on a brain study. The subject is searched in the submitted text, so a referrer who did raise it gets an answer without being called an invention | `advisory` |
-| `structure_coverage` | A structure the profile lists that neither the dictation nor the draft mentions | `advisory` — a profile can never block for something nobody described |
+| `structure_coverage` | A structure the profile lists that neither the dictation nor the draft mentions. The count is exact and the list is capped at six names, because measured on the golden set's MRI brain cases this advisory fired on every one of them naming 9 to 12 structures — a four-sentence dictation never mentions the pituitary, and a finding that reprints the protocol is read as decoration | `advisory` — a profile can never block for something nobody described |
 | `self_reported_confidence` | The model answering with its own confidence key | `advisory`, and the number is not shown to the reviewer |
 
 `block` refuses a signature until the words change. `advisory` is shown and the report

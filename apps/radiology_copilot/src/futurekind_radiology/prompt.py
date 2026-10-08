@@ -30,10 +30,14 @@ from .submission import StudySubmission
 #: Bump when the wording below changes, so a stored report says which prompt
 #: produced it. Provenance is not only about which model answered (P8).
 #:
+#: 0.3.1 states each rule once. The technique rule was in three places and the
+#: indication rule in two, and the closing line named the five sections a third
+#: time after the JSON contract had already listed them. What is instructed is
+#: unchanged; what the model has to read to be instructed by it is smaller.
 #: 0.3.0 (Sprint 9) adds the `follow_up` key and states the rule that a number is
 #: the clinician's, not the model's. 0.2.0 made the clinical indication
 #: non-model-owned after a live run rewrote a referrer's question.
-PROMPT_VERSION = "radiology-report-draft/0.3.0"
+PROMPT_VERSION = "radiology-report-draft/0.3.1"
 
 #: The five sections the model writes. The clinical indication is not among them:
 #: it is the referrer's question, recorded from the submission, and a model that
@@ -47,10 +51,10 @@ before it is used, and a statement you add that is not in the observations below
 could reach a patient. So:
 
 - Write only what the supplied observations support. Do not add a finding, a
-  measurement, a sign or a diagnosis that was not described.
-- Every size, count and index in your answer must appear in the observations or in
-  a previous report supplied below. Never state a number of your own, and never
-  round a described lesion into a measured one.
+  sign or a diagnosis that was not described.
+- A size, count or index must appear in the observations or in a previous report
+  supplied below. Never state a number of your own, and never round a described
+  lesion into a measured one.
 - Carry every observation the clinician dictated into your findings section, in
   report prose. Dropping one is as dangerous as inventing one.
 - If the observations are incomplete, negative or uncertain, say so in the
@@ -58,9 +62,8 @@ could reach a patient. So:
 - Describe only what this study shows. Do not state that something is unchanged,
   resolved, new or stable compared with an earlier scan unless that earlier report
   is supplied below.
-- If the technique was not supplied, write "Technique not provided." in the
-  technique section. Do not name a scanner, a sequence or a contrast protocol
-  that was not given.
+- If the technique was not supplied, write "Technique not provided." Do not name a
+  scanner, a sequence or a contrast protocol that was not given.
 - The clinical indication has already been recorded by the clinician. Do not
   restate, summarise or reinterpret it.
 - Do not invent a patient name, number or any identifier that is not supplied.
@@ -105,14 +108,17 @@ def _prior_block(submission: StudySubmission) -> str:
 
 
 def _user_prompt(submission: StudySubmission) -> str:
-    technique = (
-        submission.technique
-        if submission.has_technique
-        else 'Not supplied — write "Technique not provided."'
-    )
+    """The clinical turn: what was submitted, labelled by whose words each part is.
+
+    This turn states no rules. Every instruction lives in the system turn, so a
+    radiologist reading one place finds the whole contract rather than three partial
+    reminders of it — and the technique and indication rules had crept in here as
+    well, doubling what the system turn already says.
+    """
+    technique = submission.technique if submission.has_technique else "Not supplied"
     return f"""Study: {submission.study}
 Modality: {submission.modality}
-Clinical indication (already recorded — context for you, not yours to rewrite):
+Clinical indication (the referrer's own words):
 {submission.clinical_indication}
 Technique: {technique}
 
@@ -121,8 +127,7 @@ Technique: {technique}
 Observations dictated by the reporting clinician:
 {submission.findings}
 
-Draft the structured report for this study: findings, impression, recommendations,
-follow-up, and the technique line only if it was not supplied above."""
+Draft the structured report for this study."""
 
 
 def build_messages(

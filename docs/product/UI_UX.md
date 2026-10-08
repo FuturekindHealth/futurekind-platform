@@ -139,19 +139,43 @@ report" is literally visible.
 | Audit | Copilot `metadata.review` (who, when, which sections rewritten) **and** the ERP's own signature columns. Both, keyed by the same `report_id` |
 | Identity requirement | **Blocking for Beta.** Today the USG studio's signer name is a clinic-level *setting* and one shared PIN authenticates the room (`auth.ts:10-27`, `schema.prisma:91-93`). A signature must come from a login, not a configuration row |
 
-**Built, in interim form (Sprint 9).** The Alpha copilot serves its own working screen at
-`GET /` — `apps/radiology_copilot/src/futurekind_radiology/static/index.html`. It is the layout
-above with three columns: the submission and its previous reports, the six editable sections
-with the signer's name, and the quality findings with the computed confidence and the
-provenance. It debounces into `POST /check` while the clinician types, and a blocking finding
-disables the sign button. No shortcut reaches sign, no bulk action exists, and the button is
-refused server-side as well as on screen.
+**Built, in interim form (Sprint 9, worked over in Genesis Night 2).** The Alpha copilot
+serves its own working screen at `GET /` —
+`apps/radiology_copilot/src/futurekind_radiology/static/index.html`. Three columns: the
+submission and its previous reports, the six report sections with the signer's name, and the
+quality findings with the computed confidence and the provenance. It debounces into
+`POST /check` while the clinician types, and a blocking finding disables the sign button and
+refuses it server-side as well.
+
+What the interaction work added, each item because it cost the person at the console
+attention they should be spending on the images: `Ctrl/⌘+Enter` drafts, then signs; `Alt+R`
+re-checks without waiting for the debounce; `Ctrl/⌘+Shift+C` copies the signed report for the
+RIS; `Ctrl+P` prints it; `Alt+N` starts the next study; `Alt+D` and `Alt+M` give the reading
+room its dark and wide modes. Tab order skips what cannot be typed in. Textareas grow to
+their content, because 700 characters of findings in a 92-pixel box is a scroll bar fought
+once per study. A quality finding that names a section is a button, and clicking it focuses
+that section and selects the quoted words instead of leaving the reviewer to hunt for them.
+Boxes are locked by **who owns the words** (`report.py::editable_section_keys`) and every
+locked box says so and says where to change it — the technique line is locked when the
+department supplied it and editable when the model wrote it, which is the case that used to
+be locked both ways. The inputs start empty, with placeholders instead of a worked example:
+prefilled indication and dictation is a form on which a real study can be reported under
+somebody else's words.
+
+One divergence from §6 above, stated rather than slipped: signing does have a shortcut. The
+rule's purpose is that a signature must never be an accidental keystroke or a bulk act, and
+that holds — `Ctrl/⌘+Enter` signs only a draft that exists, is not blocked, and has a name
+typed; with no name it moves focus to the name box and signs nothing. The literal "no
+shortcut reaches sign" is a preference for the ERP pane and is listed as an open question for
+the afternoon, not settled by this screen.
 
 What it is **not**, and must not be mistaken for: the ERP-integrated Approval Screen; an
 individually authenticated identity (the name is typed, which is exactly the F-A defect
-above); the per-section diff against the model's original text; a screen designed for the
-radiologist's own monitor at 4pm with eleven other tabs. It exists so the workflow can be used
-and measured today, and it is deliberately throwaway once the studio has the real pane.
+above); the per-section diff against the model's original text; a saved-draft or
+across-refresh recovery — the draft lives in that tab and nowhere else, so the page refuses
+to leave with unsaved words instead of writing the last patient onto a shared workstation.
+It exists so the workflow can be used and measured today, and it is deliberately throwaway
+once the studio has the real pane.
 
 ## 7. Audit Timeline
 

@@ -51,9 +51,14 @@ def test_the_four_keys_are_the_whole_demand() -> None:
     assert "clinical_indication" not in system(turns())
 
 
-def test_the_model_is_told_not_to_restate_the_indication() -> None:
+def test_the_indication_rule_is_stated_once_where_rules_live() -> None:
+    """The rule was in both turns: "do not restate, summarise or reinterpret" in the
+    system turn, and "not yours to rewrite" in the clinical one. One instruction, said
+    once, in the place a reader looks for instructions — the turn that labels data keeps
+    its label and loses its rule."""
     assert "restate, summarise or reinterpret" in system(turns()).lower()
-    assert "not yours to rewrite" in user(turns()).lower()
+    assert "not yours to rewrite" not in user(turns()).lower()
+    assert "the referrer's own words" in user(turns()).lower()
 
 
 def test_dropping_a_dictated_observation_is_named_as_a_risk() -> None:
@@ -133,8 +138,29 @@ def test_no_infrastructure_name_can_enter_the_prompt() -> None:
 
 
 def test_the_prompt_is_versioned_so_a_report_can_be_traced_to_it() -> None:
-    # 0.3.0: the follow-up section, the number-is-the-clinician's rule, and the
-    # explicit "no priors supplied" statement. docs/product/PROMPT_LIBRARY.md §1
-    # carries the same text, and a bump here without a bump there is a fork.
-    assert PROMPT_VERSION == "radiology-report-draft/0.3.0"
+    # 0.3.1: each rule stated once. The technique rule was in three places, the
+    # indication rule in two, and the closing line named the five sections after the
+    # JSON contract had listed them. 3,097 characters became 2,894 — about 51 tokens
+    # off every draft request. docs/product/PROMPT_LIBRARY.md §1 carries the same text,
+    # and a bump here without a bump there is a fork.
+    assert PROMPT_VERSION == "radiology-report-draft/0.3.1"
     assert PROMPT_VERSION.count(".") == 2
+
+
+def test_a_rule_said_twice_is_a_rule_nobody_can_find() -> None:
+    """The de-duplication, pinned. Each instruction appears once in the conversation, so
+    a change to it has one place to be made and a reader has one place to look."""
+    both = " ".join(message["content"] for message in turns()).lower()
+    for phrase in ("technique not provided", "restate, summarise or reinterpret",
+                   "dropping one is as dangerous as inventing one"):
+        assert both.count(phrase) == 1, phrase
+
+
+def test_the_prompt_carries_the_ceiling_it_was_measured_under() -> None:
+    """A ratchet, not a target. 2,280 characters of system rules and 614 of clinical turn
+    measured at 0.3.1, about 723 tokens; `submission()` here is a shorter study. A rule
+    that pushes past the ceiling has to be a rule that earns its tokens, and a prompt
+    that quietly grows is how a draft stops fitting the deployment that runs it."""
+    messages = turns()
+    assert len(system(messages)) <= 2400
+    assert len(user(messages)) <= 800
