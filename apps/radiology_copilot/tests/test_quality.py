@@ -348,6 +348,53 @@ def test_an_interval_in_a_plan_is_not_read_as_a_comparison() -> None:
     assert "invented_history" not in ids(check(draft))
 
 
+def test_a_differential_is_not_a_comparison_with_an_earlier_study() -> None:
+    """Golden case R-11: "fits this pattern better than atherosclerosis".
+
+    That sentence is the case's whole teaching point — a concentric halo in a forty-year-old
+    is vasculitis, and the impression has to say what it fits better than. It compares two
+    diseases, not two studies, and the engine used to refuse it because "better than" sat in
+    the comparison list. Running the checks over `GOLDEN_DATASET.yaml` found it; the fix is
+    that a comparison phrase must say *when*, not merely that something is unlike something
+    else.
+    """
+    draft = {
+        **CLEAN,
+        "impression": (
+            "Large-vessel vasculitis such as Takayasu arteritis fits this pattern in this "
+            "age group better than atherosclerosis."
+        ),
+    }
+
+    assert "invented_history" not in ids(check(draft))
+
+
+def test_a_previously_healed_fracture_dates_a_lesion_and_does_not_need_a_prior() -> None:
+    """Golden case ML-06: "previously healed thoracic fractures".
+
+    Bare "previously" was in the comparison list, so a report dating a rib fracture as old
+    was refused as an invented history — on a medicolegal case, where the distinction
+    between an acute and a healed injury *is* the finding. A comparison that names what was
+    seen before is still caught, in the test below.
+    """
+    draft = {
+        **CLEAN,
+        "findings": CLEAN["findings"] + " Previously healed rib fractures are noted.",
+    }
+
+    assert "invented_history" not in ids(check(draft))
+
+
+def test_a_lesion_reported_as_previously_seen_still_needs_the_earlier_study() -> None:
+    """The half that must not be lost with the two words removed above."""
+    draft = {
+        **CLEAN,
+        "findings": CLEAN["findings"] + " The lesion is as previously described.",
+    }
+
+    assert "invented_history" in ids(check(draft))
+
+
 # -- 4. certainty escalation ----------------------------------------------------------------------
 
 
@@ -450,6 +497,22 @@ def test_the_referrers_own_name_in_the_indication_is_not_invented() -> None:
     quality = check(draft, clinical_indication="Referred by Dr Rao for chronic headache")
 
     assert "invented_identifier" not in ids(quality)
+
+
+def test_a_protocol_named_after_a_machine_is_not_a_person() -> None:
+    """Golden cases C-02 and R-09. The title pattern used to be matched case-insensitively,
+    which read "MR spectroscopy" and "MR angiography" as *Mr Spectroscopy* and refused three
+    of the hundred golden reports for naming the sequences they were asked to name. A study
+    name is not an identity, and a check that refuses correct studies is a check the
+    department routes around — a lower-case title in the prose is the price paid for that,
+    and the cheaper of the two failures."""
+    draft = {
+        **CLEAN,
+        "technique": "MRI brain with MR spectroscopy and MR angiography.",
+        "findings": CLEAN["findings"] + " MR spectroscopy shows a reduced NAA peak.",
+    }
+
+    assert "invented_identifier" not in ids(check(draft))
 
 
 # -- 8. a model grading itself ----------------------------------------------------------------

@@ -68,6 +68,15 @@ _COUNT = re.compile(
 #: "review at interval" is a plan, and a check that blocks plans produces a tool
 #: the department routes around. Using one of these with no prior supplied invents
 #: the patient's history.
+#:
+#: Each entry is the *whole* comparison phrase, and the two words that were dropped from
+#: this list say why. "previously" on its own caught "previously healed rib fractures",
+#: which is a radiologist dating a lesion, not comparing studies; "better than" caught
+#: "fits this pattern better than atherosclerosis", which is a differential and the exact
+#: reasoning the golden set asks for on that case. Both were found by running the engine
+#: over `GOLDEN_DATASET.yaml` in `scripts/validation/audit-checks.py`: a comparison check
+#: that refuses a correct rare-case report is a check the department will route around, and
+#: the temporal claim it was built to catch still arrives here in a form that says when.
 _COMPARISON = (
     "unchanged",
     "no interval change",
@@ -76,17 +85,19 @@ _COMPARISON = (
     "compared with",
     "compared to",
     "in comparison",
-    "previously",
     "as before",
+    "than before",
     "resolved",
-    "worse than",
-    "better than",
     "increased from",
     "decreased from",
     "prior study",
     "previous study",
     "earlier study",
     "earlier scan",
+    "previously seen",
+    "previously noted",
+    "previously described",
+    "as previously reported",
 )
 
 #: Certainty a hedged dictation cannot support. The golden set's `must_not_say`
@@ -132,10 +143,17 @@ _HEDGED = (
 _FORMAT_MARKERS = ("```", "**", "##", "<b>", "<br", "&nbsp;")
 _BULLET = re.compile(r"^\s*[-*•]\s+\S", re.MULTILINE)
 
-_PERSON_OR_ID = re.compile(
-    r"\b(?:mr|mrs|ms|miss|dr)\.?\s+[A-Z][a-z]{2,}|\b\d{6,}\b|"
-    r"\b(?:uhid|mrn|accession)\b",
-    re.IGNORECASE,
+#: A name, or an identifier this application was never given. Two patterns rather than
+#: one, because their case rules are opposite: a title is only a title when it is
+#: capitalised, while an identifier keyword means the same thing in any case. As a single
+#: case-insensitive pattern this read "MR spectroscopy" and "MR angiography" as
+#: *Mr Spectroscopy* and refused three of the hundred golden reports for recommending
+#: their own sequences — found by `scripts/validation/audit-checks.py`. A model that
+#: writes a title in lower case is missed by that, and an engine that refuses correct
+#: studies is the more expensive of the two failures.
+_TITLE_AND_NAME = re.compile(r"\b(?:Mr|Mdm|Mrs|Ms|Miss|Dr|Prof)\.?\s+[A-Z][a-z]{2,}")
+_IDENTIFIER_TEXT = re.compile(
+    r"\b(?:uhid|mrn|accession(?:\s+(?:no|number|id))?)\b|\b\d{6,}\b", re.IGNORECASE
 )
 
 #: An observation unit shorter than this is a fragment, not a clinical statement,
@@ -451,9 +469,10 @@ def _check_identifiers(
     """An invented name, number or identifier is a privacy breach inside a report."""
     grounding = submission.grounding_text
     for section, text in _section_pairs(sections, SECTION_KEYS):
-        match = _PERSON_OR_ID.search(text)
-        if not match:
+        found = [m for m in (_TITLE_AND_NAME.search(text), _IDENTIFIER_TEXT.search(text)) if m]
+        if not found:
             continue
+        match = min(found, key=lambda m: m.start())
         token = match.group(0)
         if token.lower() in grounding:
             continue
