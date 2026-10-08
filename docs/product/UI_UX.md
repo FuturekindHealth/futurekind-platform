@@ -102,6 +102,30 @@ deterioration, not the loudest referral text (workflow B1).
 | Audit | `request_id`, prompt version, model, attempts, degraded — attached to the draft, not to a log the user cannot see |
 | Must not have | A single "Accept all and sign". A whole-pane replacement of the composer. Streaming text into the signed field before the clinician accepts it |
 
+**Who owns each section's words, and what that means on screen.** Decided per section rather
+than by a blanket rule, because the dangerous setting is a locked box holding a sentence the
+machine wrote. `report.py::editable_section_keys` is the one authority and the screen renders
+from it, so the rule cannot drift from the rendering; each locked box states whose words it
+holds and where to change them.
+
+| Section | Written by | Locked on screen | Why, and what would change it |
+| --- | --- | --- | --- |
+| Clinical indication | The referrer, copied from the submission | **Always** | It is the question the study answers. A model that paraphrases it has changed the clinical question — the Sprint 7 live defect. To change it, edit the box in the Study column and redraft |
+| Technique | The department when it supplies parameters; the model only to say they were not given | **Only when the department wrote it** | The department's own line must not be retyped into something untrue. When nobody supplied a protocol the sentence is the model's guess, and the radiologist at the console is the only person who knows whether the study had one — so it is editable, and the note says so |
+| Findings | The model, from the dictation | Never | The comparison against the dictation is the whole review. `dropped_observation` and `unsupported_measurement` are the machine's half; the images are the reviewer's |
+| Impression | The model | Never | The highest-value section and the highest-risk one. `unsupported_certainty` refuses a hedge that became a certainty, and a rewrite here is the case where a blocking finding falls to advisory — because the image, not the dictation, becomes the source |
+| Recommendations | The model | Never | Advice about what to do now is a clinical act, not a formatting one. Fully editable, fully checked |
+| Follow-up | The model | Never | Kept apart from recommendations because an interval buried in a paragraph of referrals is an interval nobody books. Whether this section should be AI-generated at all is the sharpest question the afternoon can answer: it is the one section whose entire content is a decision rather than an observation |
+
+Nothing auto-updates after a signature: the document is amended and re-exported,
+`metadata.review.amendments` names what a human took over, and `model_provenance` keeps saying the
+draft was machine-authored. A silent auto-update of a signed report would be a different report.
+
+Rows of the table above the Alpha now meets on its own screen: elapsed seconds counting with a
+Cancel (*States*, *Latency*), failure presentation in plain words with the manual path left live
+(*Failure presentation*), and audit attached to the draft rather than to a log (*Audit*).
+Per-block accept/discard and the per-block diff remain the ERP pane's work.
+
 Per-item mode (ultrasound, mammography, cardiac — workflow D2): the pane proposes **chips**
 keyed to organs, exactly as `UsgAiDraftPanel.tsx:122-141` already does. A chip is accepted or
 rejected individually; the report body is never written by the AI. This is the pattern that
