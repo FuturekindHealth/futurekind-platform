@@ -47,6 +47,28 @@ SECTION_KEYS = (
 #: written is how a surveillance study is not done at all.
 MODEL_SECTION_KEYS = ("technique", "findings", "impression", "recommendations", "follow_up")
 
+#: The four sections whose whole purpose is to be drafted from the dictation and corrected
+#: afterwards. The clinical indication is never among them: it is the referrer's question, and
+#: a reviewer who wants it different edits the box they typed it into.
+REVIEWER_EDITABLE_SECTIONS = ("findings", "impression", "recommendations", "follow_up")
+
+
+def editable_section_keys(technique_from: str) -> tuple[str, ...]:
+    """Which sections a review screen may accept an edit for.
+
+    Locking follows **who owns the words**, not which section they sit in, and the technique
+    line is the case that proves the difference. When the department supplied its acquisition
+    parameters, that text is the department's statement and a screen that let it be retyped
+    would let it be retyped wrongly; the box to change is the one it came from. When nothing
+    was supplied, the line is the model's — it wrote "Technique not provided" — and the
+    clinician at the console is the only person who knows whether the study had a protocol.
+    A screen that locks the model's own sentence locks the radiologist out of their report.
+    """
+    if technique_from == "model":
+        return ("technique", *REVIEWER_EDITABLE_SECTIONS)
+    return REVIEWER_EDITABLE_SECTIONS
+
+
 ReviewState = Literal["pending_review", "signed", "returned_for_correction"]
 
 #: The two outcomes a quality check can have. `block` refuses a signature until the
