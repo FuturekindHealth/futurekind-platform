@@ -316,8 +316,10 @@ def centre_summary(records: list[dict]) -> dict[str, Any]:
         "sites": sites,
         "heterogeneity": spread,
         "rule": (
-            "compare prompts, workflows and reported rates across centres; never move "
-            "patient data between them (docs/CONSTITUTION.md P14)"
+            "compare prompts, workflows and reported rates within one installation; never move "
+            "patient data between them (docs/CONSTITUTION.md P14: no cross-hospital inference and "
+            "no shared model of a patient, so a hospital-to-hospital benchmark is a governance "
+            "decision, not a field in this table)"
         ),
         "caution": "a between-site gap is case mix until a stratified analysis says otherwise",
         "scale_note": (

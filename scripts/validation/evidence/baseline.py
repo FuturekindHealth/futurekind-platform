@@ -18,8 +18,9 @@ Three limitations are printed with the output rather than filed away:
 2. **The corpus is synthetic and unratified.** All 100 cases are `ratified: pending` and
    authored by engineering, so this describes a department's *idea* of a report, not its
    reports. `evidence.groundtruth` refuses to call any of it ground truth.
-3. **It is imaging only.** No modality outside CT/MRI/US/XR/CTA/CTP/MG appears, so nothing here
-   transfers to pathology, discharge or a ward document.
+3. **It is imaging only.** Every case in the corpus is a radiology study — the spread is printed as
+   `modality_counts` rather than listed here, because a list in prose is the first thing the next
+   case author forgets to update. Nothing here transfers to pathology, discharge or a ward document.
 
 The output is aggregate counts and distributions. No case text is emitted, and the same
 command reproduces every number.
@@ -185,6 +186,12 @@ def markdown_table(summary: dict[str, Any]) -> str:
             f"| {category} | {block['cases']} | {block['composition_share_median']} | "
             f"{block['reference_words_mean']} | {block['measurements_mean']} |"
         )
+    lines += [
+        "",
+        "Modalities present — every one a radiology study, which is the transfer limit stated in "
+        "the limitations:",
+        " · ".join(f"{name} {count}" for name, count in sorted(summary["modality_counts"].items())),
+    ]
     lines += ["", "**Limitations, part of the number:**"]
     lines += [f"- {note}" for note in summary["limitations"]]
     return "\n".join(lines) + "\n"

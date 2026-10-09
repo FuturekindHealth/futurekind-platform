@@ -231,6 +231,9 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)
-    except (store.StoreError, groundtruth.RecordError) as error:
+    except (store.StoreError, groundtruth.RecordError, KeyError, ValueError) as error:
+        # A refusal is a decision the operator has to read, not a traceback to scroll past.
+        # KeyError is the unknown-audience refusal and ValueError is the empty-export one; both
+        # are raised on purpose by the instruments and neither is a crash.
         print(f"refused: {error}", file=sys.stderr)
         return 1

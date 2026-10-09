@@ -314,7 +314,7 @@ def four_questions() -> list[TrendQuestion]:
             confounders=(
                 "detection effort",
                 "taxonomy version",
-                "the fact that the engine sees 10 of 26 classes",
+                "the fact that the engine sees 9 of 26 classes",
             ),
             measurable_today=False,
             why_not="labels need a clinician and a ratified case; "

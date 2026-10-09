@@ -36,7 +36,9 @@ from typing import Any
 from . import stats
 from .stats import Preregistration
 
-#: Two arms, order balanced across cases. For more than two arms use `williams_order`.
+#: Two arms only. A third arm needs a different order-balancing rule and a different multiplicity
+#: treatment, and neither exists here — `allocate()` will accept more arms, but the balance it
+#: guarantees is this one, and nothing in this module has been tested past two.
 ARMS = ("A", "B")
 
 

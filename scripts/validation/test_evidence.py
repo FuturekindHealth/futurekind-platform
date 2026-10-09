@@ -15,6 +15,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,7 @@ from futurekind_radiology.report import MODEL_SECTION_KEYS  # noqa: E402
 
 from evidence import (  # noqa: E402  - the path above is why
     baseline,
+    cli,
     edits,
     experiment,
     groundtruth,
@@ -76,6 +78,29 @@ def test_engine_coverage_is_low_and_says_so():
         "a claim of engine coverage above half the classes is a claim to re-examine"
     )
     assert coverage["human_only_classes"] > 0
+
+
+def test_no_class_claims_a_detector_it_cannot_have():
+    """`detected_by` and `engine_checks` have to agree, or the coverage figure counts a wish.
+
+    Three classes used to break this: `E02 invented_finding` was credited to `unsupported_absence`,
+    which fires on an asserted *absence* and never on an invented positive — the exact thing the
+    golden audit measured as undetectable (`docs/product/ROADMAP.md` table 4). Two others said a
+    human decides them while naming the check that sometimes catches them. The first version of
+    this file published 10 of 26; the honest number after the fix is 9 of 26, and it is pinned here
+    so it can only move by a real detector being built and measured.
+    """
+    for item in taxonomy.CLASSES:
+        if item.engine_checks:
+            assert item.detected_by in ("engine", "both"), (
+                f"{item.code} names {item.engine_checks} but says a human decides it"
+            )
+    assert taxonomy.code("E02").engine_checks == ()
+    coverage = taxonomy.engine_coverage()
+    assert coverage["with_engine_detector"] == 9
+    assert coverage["engine_coverage"] == 0.346
+    assert coverage["content_with_engine_detector"] == 8
+    assert coverage["content_engine_coverage"] == 0.667
 
 
 # ------------------------------------------------------------------ edits
@@ -765,8 +790,92 @@ def test_baseline_records_the_missing_measurements():
     assert summary["probes_per_case"]["mean"] > 3.0
 
 
+def test_the_aggregate_reads_the_key_the_producer_writes(tmp_path):
+    """The one test that catches a metric quietly reading a key nothing emits.
+
+    `reporting._aggregate()` sums `edit["chars_inserted"]`, which is a field of
+    `evidence.edits.EditReport`, not of a schema. Rename it on either side and every session reads
+    as zero characters typed — a result, printed as a number, that means only that two modules
+    stopped speaking. This test is the wire between them.
+    """
+    report = edits.compare_documents(
+        {"findings": "A left frontal lesion is present."},
+        {"findings": "A left frontal lesion is present, with surrounding oedema."},
+        ("findings",),
+    )
+    assert report.chars_inserted > 0, "the fixture stopped exercising the field"
+    record = store.SessionRecord(
+        case_ref="opaque-contract",
+        site="clinic-a",
+        actor_label="consultant-1",
+        role="consultant",
+        started_at=store.now(),
+        provenance=store.Provenance(skill="radiology-report", stub=False),
+        edit=report.as_dict(),
+    )
+    path = tmp_path / "session.jsonl"
+    assert store.append(path, [record]) == 1
+
+    view = reporting.view(store.read(path), "administration")
+    assert view["typed_chars_total"] == report.chars_inserted
+    assert "error_classes" not in view, "a cost view received clinical labels"
+
+
 def test_baseline_markdown_is_generated_and_dated():
-    table = baseline.markdown_table(baseline.run())
-    assert table.startswith("<!-- GENERATED")
-    assert "do not hand-edit" in table
-    assert "2026" in table
+    markdown = baseline.markdown_table(baseline.run())
+    assert markdown.startswith("<!-- GENERATED")
+    assert "do not hand-edit" in markdown
+    # The date must be the run's own, not a year someone typed: an undated artefact cannot be
+    # told apart from a stale one.
+    assert date.today().isoformat() in markdown
+
+
+# ------------------------------------------------------------------ cli
+
+
+def test_the_cli_turns_each_refusal_into_an_exit_code(tmp_path, capsys):
+    """The verbs are the interface, and an interface with no test is a documented rumour.
+
+    Exit codes are decisions here: 0 means the instrument ran clean and 1 means it refused, with
+    the reason on stderr in one line rather than a traceback to scroll past. An unknown audience
+    never reaches the handler at all — `--audience` is an argparse `choices` list, so the shell
+    refuses it with 2 and the seven readers are named in the usage line.
+    """
+    assert cli.main(["selftest"]) == 0
+    assert cli.main(["taxonomy"]) == 0
+
+    capsys.readouterr()
+    assert cli.main(["check", "--store", str(REPO / "evidence.jsonl")]) == 1
+    assert "refused:" in capsys.readouterr().err
+
+    with pytest.raises(SystemExit) as raised:
+        cli.main(["view", "--audience", "not_a_reader", "--store", str(tmp_path / "s.jsonl")])
+    assert raised.value.code == 2
+
+
+def test_the_cli_verbs_named_in_the_handbook_exist():
+    """`docs/evidence/HANDBOOK.md` §2 promises ten verbs. If one is renamed, that table lies.
+
+    Asked through the public parser rather than through argparse internals: a subcommand that
+    does not exist exits 2 on `--help`, so this distinguishes the verbs from a typo.
+    """
+    parser = cli.build_parser()
+    documented = {
+        "baseline",
+        "taxonomy",
+        "groundtruth",
+        "selftest",
+        "loop-state",
+        "view",
+        "check",
+        "tables",
+        "figure",
+        "regress",
+    }
+    for verb in sorted(documented):
+        with pytest.raises(SystemExit) as raised:
+            parser.parse_args([verb, "--help"])
+        assert raised.value.code == 0, f"{verb} is documented but not a verb"
+    with pytest.raises(SystemExit) as raised:
+        parser.parse_args(["nonsense"])
+    assert raised.value.code == 2
