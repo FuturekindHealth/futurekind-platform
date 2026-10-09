@@ -10,7 +10,147 @@ The format is based on Keep a Changelog.
 
 Nothing below is tagged; the feature branch carries all of it.
 
-### Genesis Night 4 — the synthesis (2026-10-09)
+### Genesis Night 5 — the evidence system (2026-10-09)
+
+The brief was that the repository has enough architecture, enough philosophy and enough
+documentation, and now needs **measurement** rather than more prose. The constraint held:
+`core/gateway`, `apps/radiology_copilot`, `configs/`, `compose.yaml` and `docs/adr/` were not
+touched. What exists tonight is an instrument package — 15 stdlib-only modules, 4,114 lines,
+under `scripts/validation/evidence/` — that turns clinical work into data, the twelve documents
+that say how to use it, and a CI job that runs all of it.
+
+**Nothing was measured against a model, a patient or a clinician, because nothing is connected
+to one yet.** The honest output of this sprint is the size of the gap, not a result across it:
+the ground-truth store reports `ratified_and_valid: 0` and `usable_as_evidence_about_care: 0.0`.
+That zero is the gate working rather than a placeholder — a case is counted only if it passes
+`validate()` *and* carries a ratification, and `validate()` checks the whole chain, including
+that an author cannot ratify their own case (`check-refusals.py`'s `self-ratification` mutation
+proves that rule can fail). Every figure below was produced by running a command tonight, and
+each is reproducible with the command printed beside it.
+
+#### Added
+
+- **`scripts/validation/evidence/`** — the instruments. `taxonomy.py` 26 error classes with the
+  engine's real reach over them; `edits.py` Levenshtein and SequenceMatcher opcodes, section-
+  and phrase-level rewrite detection; `scoring.py` six separate axes with no `total`, no
+  weighted sum and no "FutureKind score" — clinical correctness, writing quality, workflow
+  quality, safety, efficiency, user satisfaction — and an `assert_not_combined()` that raises
+  unconditionally, because the golden dataset's own rule (`docs/product/GOLDEN_DATASET.yaml:54`:
+  averaging hides both signal and danger) is worth more as a failing test than as a sentence;
+  `stats.py` Wilson interval, exact McNemar, sign test, Wilcoxon signed rank (declines to give a
+  p-value below n=10 and points at the sign test),
+  percentile bootstrap with a published seed, paired Cohen's d with the Hedges small-sample
+  correction,
+  Holm step-down, and the two power formulas the study designs need; `groundtruth.py` and
+  `store.py` the gold-standard record, with PHI discipline as code rather than as policy —
+  hashes and lengths by default, `text_stored` only under `allow_text`, k-anonymity floor of 5
+  on the quasi-identifier combination, and an `inside_repo()` refusal that stops any evidence
+  store being written into the git tree; `baseline.py`, `regression.py`, `experiment.py`,
+  `longitudinal.py`, `loops.py`, `reporting.py`, `cli.py`.
+- **`scripts/validation/test_evidence.py`** — 71 tests, all passing, including the ones that
+  pin the refusals rather than the features: the composite score cannot be requested, a loop can
+  propose but never apply, a store path inside the repository is refused, an inconclusive
+  regression fails closed, and every CLI refusal arrives as an exit code rather than a traceback.
+- **`scripts/validation/check-refusals.py`** — the mutation harness, because a refusal nobody has
+  seen fire is a belief. Fourteen mutations, each deleting one guard — `thin-cell` removes the
+  k-anonymity floor, `store-path` allows an evidence store inside the repository,
+  `composite-score` lets the six axes be averaged, `loop-applies` lets the improvement loop apply
+  its own proposal, `self-ratification` lets a case's author ratify it, and nine more — and every
+  one of the fourteen was caught. `check-refusals.py --list` prints the set, and every row names
+  the single test that must fail when its guard goes. It refuses to
+  start if any target file differs from `HEAD`, proves a known-green baseline first, re-checks
+  each file's sha256 immediately before writing it, restores from a staging copy, and cleans
+  only the debris it created.
+- **`.github/workflows/ci.yml` job `validation`** — ruff at the Gateway's rule set over
+  `evidence/` and its tests, then both validation test files named explicitly. The reason this
+  job exists is a defect: pytest's default collection pattern wants `test_*.py`, so the
+  dashboard's 28 tests had **never run anywhere**, and the 71 new ones would have joined them.
+  The job also runs `python -m evidence selftest`, runs `check-refusals.py` so every refusal is
+  proved to be able to fail on every push rather than on whoever remembers, regenerates the
+  baseline, and greps the
+  output for the two sentences that stop it being read as evidence about care.
+- **`docs/evidence/`** — thirteen documents, one per subject, indexed as §11 of
+  [`docs/README.md`](docs/README.md) with an owns/stops-at row each: `FRAMEWORK.md` (the study
+  design across six collector roles), `HANDBOOK.md` (what a clinician does, minute by minute),
+  `PROTOCOL.md` (the evaluation protocol), `ERROR_TAXONOMY.md` (the 26 classes and the generated
+  coverage block), `METRICS.md` (every metric, its disposition, and the deletion register),
+  `GROUND_TRUTH.md` (the gold-standard specification), `BENCHMARK.md` (the clinical benchmark
+  framework), `RESEARCH.md` (publication output, anonymisation, what may be exported),
+  `EXPERIMENTATION.md` (A/B arms and the statistics that decide them), `IMPROVEMENT.md` (the two
+  closed loops, and why neither is allowed to apply its own proposals), `ANALYTICS.md` (seven
+  audiences, seven different views, and why a view is not a permission system),
+  `EVIDENCE_ROADMAP.md` (the sequence), and `BASELINE.md` (generated — do not hand-edit).
+- **The baseline, from the 100 golden studies** (`python -m evidence baseline`, 2026-10-09):
+  composition share mean **0.914**, median **0.9446**; 28.34 words dictated versus 38.33 in the
+  reference; **3.1 probes per case**; teaching point present in 100 of 100. The finding that
+  matters is the one that closes a claim rather than supporting one: **0.23 measurements per
+  reference report, median 0, p75 0** — and for the `rare` and `medicolegal` categories,
+  exactly **0.0**. The current corpus cannot measure measurement accuracy at all, so no
+  accuracy metric may be quoted from it, and `BASELINE.md` says so in its own limitations list.
+
+#### Changed
+
+- `docs/product/README.md` and `docs/product/ROADMAP.md` now state the four suites and the fact
+  that all of them run in CI, with the date and the command that re-counts them. Both edits are
+  line-neutral, because nine tracked documents cite `docs/product/README.md` by line number and
+  a shifted table row is a broken citation, not a cosmetic one.
+- `docs/CONCEPTUAL_DEBT.md` D2 rewritten, and `docs/PHILOSOPHY.md`'s matching bullet corrected.
+  Both previously asserted that `SPECIFICATION.md:929` "still says 482" and that
+  `DOMAIN_MODEL.md:1207` "said 380". **Measured tonight, neither line contains a number, and no
+  file in the repository states 482 as a count.** The register about drifted citations had
+  drifted citations in it; the row now says so, and names the command that counts the nine
+  tracked markdown files carrying a test figure.
+
+#### Fixed (found by checking, not by a failing test)
+
+- `stats.cohens_d` described itself as Hedges-corrected and was not. At n=20 the uncorrected
+  statistic overstates the effect by 4.17% (`1 - 3/(4·19-1) = 0.96`), which is exactly the sample
+  size a first study will have.
+- The error taxonomy had two opposite errors in one table. `E02 invented_finding` was mapped onto
+  `unsupported_absence` — a check that fires when a draft asserts an absence the input does not
+  support, which is the other direction, so the engine has no detector for an invented finding and
+  the published coverage was inflated by one class. `E03 wrong_measurement` and `E07
+  unsupported_diagnosis` did cite real, correctly-directed checks (`unsupported_measurement`,
+  `unsupported_certainty`) while their `detected_by` field still said `human`, so the same table
+  under-reported the engine on two classes it can see. Corrected figures, published in
+  `docs/evidence/ERROR_TAXONOMY.md` as generated JSON: **engine coverage 9 of 26 (0.346)**, over
+  the 12 content classes **8 (0.667)**, 9 classes reachable only by a human. A test now pins all
+  four numbers, and `unknown_engine_checks()`/`unmapped_engine_checks()` both return empty.
+- `baseline.py`'s docstring enumerated the corpus's modalities; `HRCT` made that list false, so
+  the enumeration is gone and the modality line is generated from the measurement instead.
+- `docs/evidence/BASELINE.md` — the file whose own first line forbids hand-editing the numbers had
+  been filled by pasting a command's output through a shell, which silently turned every `·` in
+  the new modality line into a `.`. Both generated documents are now written from the generator's
+  bytes and compared against it: `BASELINE.md` is byte-identical to `python -m evidence baseline
+  --markdown`, and `ERROR_TAXONOMY.md`'s block is verbatim apart from one trailing newline. The
+  rule a file states should be enforced by how the file is made, not by the reader's good manners.
+- `experiment.py` carried a comment promising a `williams_order` that does not exist. It now
+  states plainly that the design is two arms.
+- `reporting.centre_summary` wrote a cross-site rule wider than **P14** allows. P14 forbids
+  cross-hospital inference and any shared model of a patient, so a hospital-to-hospital
+  benchmark is a governance amendment, not a field in a table; the rule text now says that.
+
+**Self-review, part 14 of the brief.** The three ways this system can lie are recorded rather
+than argued away: a rate that improves because its denominator moved (every row of
+`METRICS.md` §2 carries its denominator and how it is gamed, and `case_mix` travels beside every
+rate so an easier case mix cannot read as an improvement); a loop that ships its own proposal
+(`loops.apply()` raises, and the mutation harness deletes that guard to prove it fails); a
+composite score that lets an efficiency gain pay for a safety regression (`assert_not_combined()`
+raises unconditionally, likewise mutated). `METRICS.md` §6 records the eight deletions with their
+reasons — edit distance as a quality score, the phrase-rewrite count, "hallucination rate" as an
+engine output, the AI-trust index, rework as a rate, model-reported confidence, draft similarity
+as a stand-alone headline, and "tests passing" as an evidence metric. They are written down
+because a deletion that is not written down comes back as a feature.
+
+**What this sprint does not do.** It does not answer "does FutureKind help clinicians?" — it
+makes the question answerable, and it says what has to exist before an answer is honest: a
+ratifier for the golden set, a study running on a real model with real clinicians, and the three
+gaps stage 4 names at [`docs/BLUEPRINT.md`](docs/BLUEPRINT.md):62 — audit emitted but not
+retained, no Hospital object, identity as one shared key — which are the same four unwritten
+ADRs (`docs/CONCEPTUAL_DEBT.md` D1: 0003, 0004, 0005, 0007) the platform keeps citing as
+authority for borders it cannot enforce in code.
+
+
 
 A thinking sprint on purpose: no code, no configuration, no test and no compose file
 changed. Seven new documents, six extended, and one commit that corrected five statements

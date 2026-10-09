@@ -43,7 +43,7 @@ as built; everything here is above it.
 | …ratified by a clinician | **0** |
 | Prompts running in code | **1** — `radiology-report-draft/0.3.1` |
 | Deterministic safety checks on a draft | **9**, run three times (draft, every edit, before signature). Six of them can refuse the sign-off; none of them asks the model |
-| Tests in the repository | **775** — 492 Gateway and 255 copilot (both in CI), 28 on the validation dashboard (`scripts/validation/`, not in CI) |
+| Tests in the repository | **846** — 492 Gateway, 255 copilot, 71 evidence instruments, 28 validation dashboard. All four are in CI (`.github/workflows/ci.yml`, jobs `gateway`, `copilot`, `validation`) as at 2026-10-09; re-count by running those three jobs' `pytest` commands |
 | Real-model latency measurements | **0.** The only timing taken is 27–30 ms against a stub |
 | Ungoverned direct-to-model paths at the customer | **at least 4**, of which one uses a vision model and one selects its model from an environment variable |
 

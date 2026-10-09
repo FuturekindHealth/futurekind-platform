@@ -94,9 +94,10 @@ Three of the repository's open wounds are accidents defended as if they were pri
 
 - `core/gateway/models.yaml` still carries `model:` (`:142-166`), and its own comment says
   step 3 of `ADR-0002` deletes it (`:33-34`). A model id is a mechanism.
-- Six documents restate test counts. `ARCHITECTURE.md:304-305` says 492 and 255;
-  `SPECIFICATION.md:929` still says 482; `product/README.md:46` says 775. A test count is a
-  mechanism's shadow, and it moves without asking.
+- Nine tracked markdown files carry a test-count figure (measured 2026-10-09:
+  `git ls-files '*.md' | xargs grep -lE '\b(492|255|775|846)\b'`). `ARCHITECTURE.md:304-305`
+  says 492 and 255; `product/README.md:46` said 775 until the evidence suite made it 846. A
+  test count is a mechanism's shadow, and it moves without asking.
 - The Gateway walks fallback chains (`routing.py:175-215`, `service.py:176`) that no data
   populates: no `fallbacks:` key exists in any YAML in this repository (measured). Chain
   length is one, `degraded` is always false, and `OUTCOME_FALLBACK` (`service.py:58`) is
