@@ -34,7 +34,7 @@ vision and leaving it un-governed is not a decision, it is drift.
 **Alpha, built and verified:** Gateway with skill/capability/policy/alias/model namespaces,
 alias contract checked at startup, OpenAI-compatible interface, fail-closed parsing, provenance
 and policy on every answer, golden fixtures and an end-to-end test through three real uvicorn
-processes; CI on every push running three test jobs — Gateway (492), copilot (255) and the
+processes; CI (on `main`/`develop` pushes and every pull request) running three test jobs — Gateway (492), copilot (255) and the
 validation tools that measure them (71 evidence instruments, plus 28 dashboard tests that were
 invisible to CI until Genesis Night 5) — plus ruff, the citation check and an image build. The radiology
 copilot now runs one complete clinical workflow — MRI brain — end to end in a browser a

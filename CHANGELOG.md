@@ -66,9 +66,15 @@ each is reproducible with the command printed beside it.
   job exists is a defect: pytest's default collection pattern wants `test_*.py`, so the
   dashboard's 28 tests had **never run anywhere**, and the 71 new ones would have joined them.
   The job also runs `python -m evidence selftest`, runs `check-refusals.py` so every refusal is
-  proved to be able to fail on every push rather than on whoever remembers, regenerates the
-  baseline, and greps the
-  output for the two sentences that stop it being read as evidence about care.
+  proved to be able to fail by the runner rather than by whoever remembers, regenerates the
+  baseline, and greps the output for the two sentences that stop it being read as evidence about
+  care.
+- **A trigger boundary found while checking, not while building.** `ci.yml:9-12` fires on pushes to
+  `main` and `develop` and on pull requests — **not** on a push to a feature branch. Every commit in
+  this sprint therefore sits on a branch the runner has never executed; `GET /actions/runs?head_sha=`
+  for `6a6afbd` returns `total_count: 0`. The eight steps of the `validation` job were run locally,
+  in order, on this machine, and the documents now say when CI actually runs rather than implying it
+  runs always. Nothing tonight is claimed as green on a runner that never saw it.
 - **`docs/evidence/`** — thirteen documents, one per subject, indexed as §11 of
   [`docs/README.md`](docs/README.md) with an owns/stops-at row each: `FRAMEWORK.md` (the study
   design across six collector roles), `HANDBOOK.md` (what a clinician does, minute by minute),

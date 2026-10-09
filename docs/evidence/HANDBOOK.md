@@ -25,8 +25,9 @@ PYTHONPATH=. python -m pytest -q test_evidence.py   # expected: 71 passed
 
 `selftest` is the one to run on a machine you have never used before: it carries known answers for
 the Wilson interval and McNemar, so it detects a wrong statistic rather than a wrong assumption.
-It exits non-zero when anything fails, and CI runs it on every push
-([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)).
+It exits non-zero when anything fails, and CI runs it on every push to `main` or `develop` and on
+every pull request ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) — a push to a
+feature branch triggers nothing, which is worth knowing before a red suite is assumed to be green.
 
 If either command cannot start, the two things to check first are the working directory (the
 package is imported as `evidence`, so `PYTHONPATH` must reach `scripts/validation`) and whether
@@ -123,10 +124,12 @@ gaps rather than confirming existing ones: the detectable-effect test compared o
 constant in the power table passed, and the fail-closed safety gate's operative branch was not the
 one its test appeared to cover. Both now have a test that can see them.
 
-**CI runs it on every push** (`.github/workflows/ci.yml`, job `validation`). That is the right
-home for it: the runner's checkout is clean by construction, which is the condition the harness
+**CI runs it on every push to `main` or `develop`, and on every pull request**
+(`.github/workflows/ci.yml`, job `validation`) — not on a push to a feature branch, so a branch
+that has never opened a PR has never been proved by the runner. That is the right home for it
+anyway: the runner's checkout is clean by construction, which is the condition the harness
 refuses to start without, and the tree is disposable afterwards — the two things a laptop has to
-arrange for itself. A proof that only runs when someone remembers it is the
+arrange for itself and usually forgets. A proof that only runs when someone remembers it is the
 [`CONCEPTUAL_DEBT.md`](../CONCEPTUAL_DEBT.md) D13 defect wearing a better outfit.
 
 **Adding a refusal means adding its mutation.** A guard without a row in `check-refusals.py` is a
