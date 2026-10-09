@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radiology Copilot — validation session</title>
+<!--
+  The screen Dr Abinash works in. One study at a time, dictation on the left, the draft on
+  the right, and two buttons per quality finding because there is no script on this machine
+  that can tell whether a blocked sentence was a real problem.
+
+  Nothing here is fetched from anywhere outside this process: no CDN, no font, no analytics.
+  A hospital machine reads its own reports offline, and a stylesheet that has to leave the
+  building is a screen that fails in front of a patient.
+-->
+<style>
+  :root { --line: #d5d9de; --ink: #12181f; --muted: #5b6672; --warn: #b00000; --ok: #116437; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.55 system-ui, sans-serif; color: var(--ink); background: #fafbfc; }
+  header { display: flex; gap: 14px; align-items: baseline; padding: 10px 18px;
+           border-bottom: 2px solid var(--line); background: #fff; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0 auto 0 0; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .clock { font-variant-numeric: tabular-nums; font-weight: 600; }
+  main { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(420px, 1.25fr);
+         gap: 16px; padding: 16px 18px; align-items: start; }
+  section { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted);
+       margin: 0 0 8px; }
+  .dictation { white-space: pre-wrap; font-size: 15px; }
+  label.sec { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 3px; }
+  textarea { width: 100%; font: 15px/1.5 system-ui, sans-serif; border: 1px solid var(--line);
+             border-radius: 6px; padding: 8px; resize: vertical; background: #fff; }
+  textarea:focus { outline: 2px solid #7aa7d9; }
+  .count { font-size: 12px; color: var(--muted); }
+  .finding { border: 1px solid var(--line); border-radius: 6px; padding: 8px; margin-bottom: 8px; }
+  .finding.block { border-left: 4px solid var(--warn); }
+  .finding.advisory { border-left: 4px solid #c9a227; }
+  .finding .name { font-weight: 600; }
+  .finding .quote { color: var(--muted); font-size: 13px; }
+  .verdicts { display: flex; gap: 6px; margin-top: 6px; }
+  button { font: 14px system-ui, sans-serif; padding: 7px 11px; border-radius: 6px;
+           border: 1px solid var(--line); background: #fff; cursor: pointer; }
+  button:hover { background: #eef2f6; }
+  button[aria-pressed="true"] { background: #dbeafe; border-color: #6f93c4; }
+  button.primary { background: var(--ok); color: #fff; border-color: var(--ok); font-weight: 600; }
+  button.danger { color: var(--warn); }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
+  .status { padding: 8px 10px; border-radius: 6px; font-size: 14px; }
+  .status.blocking { background: #fdecea; color: var(--warn); }
+  .status.advisory { background: #fff8e1; }
+  .status.clear { background: #e8f5ee; color: var(--ok); }
+  .queue { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px;
+          cursor: pointer; background: #fff; }
+  .chip.done { background: #e8f5ee; border-color: #9fc9b1; }
+  .chip.current { outline: 2px solid #6f93c4; }
+  .note { font-size: 13px; color: var(--muted); }
+  .study { font-size: 18px; font-weight: 600; }
+  #report, #summary { margin: 0 18px 24px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; background: #fff; }
+  td, th { border: 1px solid var(--line); padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #f2f4f6; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Radiology Copilot · validation session</h1>
+  <div class="meta" id="who">loading…</div>
+  <div class="meta" id="routing"></div>
+  <div class="clock" id="clock">0:00</div>
+</header>
+
+<main>
+  <div>
+    <section>
+      <h2>Studies</h2>
+      <div class="queue" id="queue"></div>
+      <p class="note" id="progress"></p>
+    </section>
+    <section style="margin-top:16px">
+      <h2>What was submitted</h2>
+      <p class="study" id="study"></p>
+      <p class="note" id="indication"></p>
+      <h2 style="margin-top:14px">Dictated observations — the source of truth</h2>
+      <div class="dictation" id="dictation">nothing loaded yet</div>
+      <h2 style="margin-top:14px">Previous report supplied</h2>
+      <div class="dictation" id="prior">none</div>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>The draft, editable</h2>
+      <div id="fields"></div>
+      <div class="bar">
+        <button id="recheck">Re-check (Alt+R)</button>
+        <button id="redraft">Ask for a different draft</button>
+        <input id="note" placeholder="optional note for the redraft" style="flex:1;min-width:180px;padding:7px;border:1px solid var(--line);border-radius:6px">
+      </div>
+    </section>
+
+    <section style="margin-top:16px">
+      <h2>Quality checks — your call, not the machine's</h2>
+      <div class="status" id="status"></div>
+      <div id="findings" style="margin-top:10px"></div>
+      <p class="note" id="confidence"></p>
+      <div class="bar">
+        <button class="primary" id="approve">Approve and sign (Ctrl+Enter)</button>
+        <button class="danger" id="reject">Not usable — I would type it myself</button>
+        <button id="export">Export the session</button>
+        <a href="/report" target="_blank">End-of-session report</a>
+      </div>
+      <p class="note" id="message"></p>
+    </section>
+  </div>
+</main>
+
+<section id="summary">
+  <h2>Session so far</h2>
+  <div id="summary-body" class="note">Nothing recorded yet.</div>
+</section>
+
+<script>
+const SECTIONS = ["technique", "findings", "impression", "recommendations", "follow_up"];
+const LABELS = {
+  technique: "Technique", findings: "Findings", impression: "Impression",
+  recommendations: "Recommendations", follow_up: "Follow-up",
+};
+const ROWS = { technique: 3, findings: 14, impression: 6, recommendations: 4, follow_up: 3 };
+
+let state = { studies: [], clinician: "", skill: "" };
+let current = null;          // study_id under review
+let draft = null;            // the draft the copilot returned
+let clockStart = 0;          // when this draft appeared
+let timerId = null;
+let verdicts = {};           // "severity|check|section" -> real_problem | not_a_problem
+let approvals = 0;           // refused sign-off attempts on this study, counted by the server
+
+async function api(path, body) {
+  const response = await fetch(path, body === undefined
+    ? { headers: { "content-type": "application/json" } }
+    : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const payload = await response.json();
+  if (!response.ok) throw payload;
+  return payload;
+}
+
+function say(text, kind) {
+  const box = document.getElementById("message");
+  box.textContent = text;
+  box.className = kind || "note";
+}
+
+function startClock() {
+  clockStart = Date.now();
+  clearInterval(timerId);
+  timerId = setInterval(() => {
+    const seconds = Math.floor((Date.now() - clockStart) / 1000);
+    document.getElementById("clock").textContent =
+      `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  }, 500);
+}
+
+function reviewSeconds() {
+  return (Date.now() - clockStart) / 1000;
+}
+
+function text(id, value) {
+  document.getElementById(id).textContent = value;
+}
+
+async function load() {
+  state = await api("/api/state");
+  text("who", `${state.clinician} · skill ${state.skill || "?"} · ${state.copilot}`);
+  renderQueue();
+  refreshSummary();
+  const next = state.studies.find(study => study.state !== "done");
+  if (next) open(next.study_id);
+  else showDone();
+}
+
+function renderQueue() {
+  const queue = document.getElementById("queue");
+  queue.textContent = "";
+  state.studies.forEach(study => {
+    const chip = document.createElement("button");
+    chip.className = "chip" + (study.state === "done" ? " done" : "")
+                   + (study.study_id === current ? " current" : "");
+    chip.textContent = study.study_id;
+    chip.title = study.study;
+    chip.onclick = () => open(study.study_id);
+    queue.appendChild(chip);
+  });
+  const done = state.studies.filter(study => study.state === "done").length;
+  text("progress", `${done} of ${state.studies.length} reviewed`);
+}
+
+async function open(studyId) {
+  current = studyId;
+  verdicts = {};
+  approvals = 0;
+  const study = state.studies.find(item => item.study_id === studyId) || {};
+  text("study", study.study || studyId);
+  text("indication", "");
+  text("dictation", "generating the draft…");
+  text("prior", "—");
+  document.getElementById("fields").textContent = "";
+  say("generating…");
+  renderQueue();
+  try {
+    const result = await api("/api/generate", { study_id: studyId });
+    draft = result.draft;
+    renderDraft();
+    startClock();
+    text("routing", `${result.meta.alias || "alias not read"} · ${draft.model_provenance?.model || ""}`
+      + ` · generated in ${result.meta.generation_seconds}s`);
+    say("");
+  } catch (error) {
+    say(`the draft failed: ${error.error?.code || error.message}`, "status blocking");
+  }
+}
+
+function renderDraft() {
+  text("study", draft.metadata?.study || current);
+  text("indication", draft.clinical_indication || "");
+  text("dictation", draft.metadata?.dictated_findings || "(none supplied)");
+  const priors = draft.metadata?.compared_with || [];
+  text("prior", priors.length ? priors.join("\n") : "none");
+
+  const fields = document.getElementById("fields");
+  fields.textContent = "";
+  SECTIONS.forEach(key => {
+    const label = document.createElement("label");
+    label.className = "sec";
+    label.textContent = LABELS[key];
+    const area = document.createElement("textarea");
+    area.rows = ROWS[key];
+    area.value = draft[key] || "";
+    area.dataset.section = key;
+    area.oninput = () => {
+      const count = area.value.trim().split(/\s+/).filter(Boolean).length;
+      counter.textContent = `${count} words · changed from the draft: ${
+        area.value.trim() !== (draft[key] || "").trim() ? "yes" : "no"}`;
+      scheduleCheck();
+    };
+    const counter = document.createElement("span");
+    counter.className = "count";
+    fields.append(label, area, counter);
+    counter.textContent = `${(area.value.trim().split(/\s+/).filter(Boolean).length)} words`;
+  });
+  renderQuality(draft.quality, draft.confidence);
+}
+
+function sectionsNow() {
+  const out = {};
+  document.querySelectorAll("textarea[data-section]").forEach(area => { out[area.dataset.section] = area.value; });
+  return out;
+}
+
+function renderQuality(quality, confidence) {
+  const status = document.getElementById("status");
+  status.className = "status " + (quality.status || "clear");
+  status.textContent = quality.status === "blocking"
+    ? `${quality.findings.filter(f => f.severity === "block").length} blocking finding(s): the product will refuse a signature until the words change.`
+    : quality.status === "advisory" ? "Advisory findings only — the choice to proceed is yours."
+    : "Every checkable claim in this draft traces back to what was submitted.";
+
+  const box = document.getElementById("findings");
+  box.textContent = "";
+  (quality.findings || []).forEach(finding => {
+    const key = `${finding.severity}|${finding.check}|${finding.section || ""}`;
+    const row = document.createElement("div");
+    row.className = "finding " + finding.severity;
+    const title = document.createElement("div");
+    title.className = "name";
+    title.textContent = `${finding.check} · ${finding.section || "document"}`;
+    const message = document.createElement("div");
+    message.textContent = finding.message || "";
+    const quote = document.createElement("div");
+    quote.className = "quote";
+    quote.textContent = finding.evidence ? `the words: ${finding.evidence}` : "";
+    row.append(title, message, quote);
+
+    const buttons = document.createElement("div");
+    buttons.className = "verdicts";
+    [["real_problem", "Real problem"], ["not_a_problem", "Not a problem"]].forEach(([value, label]) => {
+      const button = document.createElement("button");
+      button.textContent = label;
+      button.dataset.value = value;
+      button.setAttribute("aria-pressed", String(verdicts[key] === value));
+      button.onclick = () => {
+        verdicts[key] = value;
+        // Only the two buttons are touched. Rebuilding the whole strip on every tap would
+        // throw away the reviewer's scroll position mid-list, twenty times an afternoon.
+        buttons.querySelectorAll("button").forEach(other => {
+          other.setAttribute("aria-pressed", String(other.dataset.value === value));
+        });
+      };
+      buttons.appendChild(button);
+    });
+    row.appendChild(buttons);
+    box.appendChild(row);
+  });
+  if (!(quality.findings || []).length) {
+    box.textContent = "No findings raised. Say so below rather than signing past an empty list.";
+  }
+
+  const missing = document.createElement("p");
+  missing.className = "note";
+  missing.textContent = `Confidence before you touched it: ${confidence?.level || "?"} — ${
+    (confidence?.reasons || []).join(" ")}`;
+  document.getElementById("confidence").replaceWith(missing);
+  missing.id = "confidence";
+}
+
+let checkTimer = null;
+function scheduleCheck() {
+  clearTimeout(checkTimer);
+  checkTimer = setTimeout(runCheck, 700);
+}
+
+async function runCheck() {
+  if (!current) return;
+  try {
+    const result = await api("/api/check", { study_id: current, sections: sectionsNow() });
+    renderQuality(result.quality, result.confidence);
+  } catch (error) {
+    say(`the re-check failed: ${error.error?.code || error.message}`, "status blocking");
+  }
+}
+
+function verdictList() {
+  return Object.entries(verdicts).map(([key, verdict]) => {
+    const [severity, check, section] = key.split("|");
+    return { severity, check, section, verdict };
+  });
+}
+
+async function approve() {
+  if (!current) return;
+  say("signing…");
+  try {
+    const result = await api("/api/sign", {
+      study_id: current, sections: sectionsNow(),
+      review_seconds: reviewSeconds(), approval_seconds: 0.2, verdicts: verdictList(),
+    });
+    state.studies.find(study => study.study_id === current).state = "done";
+    renderQueue();
+    refreshSummary();
+    const next = state.studies.find(study => study.state !== "done");
+    if (next) open(next.study_id); else showDone();
+  } catch (error) {
+    approvals += 1;
+    say(`the product refused the signature (${error.error?.code || "unknown"}): resolve the `
+        + "blocking findings above, or record the study as not usable.", "status blocking");
+  }
+}
+
+async function reject() {
+  if (!current) return;
+  const result = await api("/api/reject", {
+    study_id: current, sections: sectionsNow(),
+    review_seconds: reviewSeconds(), approval_seconds: 0, verdicts: verdictList(),
+  });
+  state.studies.find(study => study.study_id === current).state = "done";
+  renderQueue();
+  refreshSummary();
+  const next = state.studies.find(study => study.state !== "done");
+  if (next) open(next.study_id); else showDone();
+}
+
+async function redraft() {
+  if (!current) return;
+  const note = document.getElementById("note").value.trim();
+  const result = await api("/api/generate", { study_id: current, note });
+  draft = result.draft;
+  renderDraft();
+  startClock();
+  say(`a new draft (the request for it is counted as a redraft)`);
+}
+
+async function refreshSummary() {
+  const report = await api("/api/report");
+  const m = report.metrics;
+  const lines = [
+    `reviewed ${m.studies_reviewed}, signed ${m.studies_signed}, abandoned ${m.studies_abandoned}`,
+    `typing reduction: mean ${m.typing_reduction_pct.mean}% median ${m.typing_reduction_pct.median}%`,
+    `edit distance mean ${m.edit_distance.mean}`,
+    `review time mean ${m.average_review_time_seconds}s median ${m.median_review_time_seconds}s`,
+    `blocking findings ${m.blocking_findings.total}, false-blocking by your verdict ${m.false_blocking_rate.by_radiologist_verdict}`,
+    `advisories shown ${m.advisory_usefulness.shown}, acted on ${m.advisory_usefulness.acted_on}`,
+    `confidence before approval: ${m.average_confidence_before_approval.reading}`,
+    `text you removed the engine had not flagged: ${m.false_hallucinations_total}`,
+  ];
+  document.getElementById("summary-body").textContent = lines.join("  ·  ");
+}
+
+function showDone() {
+  clearInterval(timerId);
+  document.getElementById("clock").textContent = "—";
+  say("Every study in this session is closed. Export the files, then read the report.", "status clear");
+  refreshSummary();
+}
+
+document.getElementById("approve").onclick = approve;
+document.getElementById("reject").onclick = reject;
+document.getElementById("recheck").onclick = runCheck;
+document.getElementById("redraft").onclick = redraft;
+document.getElementById("export").onclick = async () => {
+  const result = await api("/api/export", {});
+  const written = Object.entries(result.written).map(([name, path]) => `${name}: ${path}`).join("\n");
+  document.getElementById("summary-body").textContent = "Written:\n" + written;
+  say("Exported. rows.csv/rows.json hold numbers; phrases.csv quotes report text and stays "
+      + "on this machine.", "status clear");
+};
+document.addEventListener("keydown", event => {
+  if (event.ctrlKey && event.key === "Enter") { event.preventDefault(); approve(); }
+  if (event.altKey && event.key.toLowerCase() === "r") { event.preventDefault(); runCheck(); }
+});
+
+load();
+</script>
+</body>
+</html>

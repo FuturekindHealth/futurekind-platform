@@ -1,6 +1,7 @@
 name: CI
 
-# Both Python suites, both lints, and the release-hygiene rules the repository now
+# Three Python suites — Gateway, copilot, and the validation tools that measure them — the
+# lints, and the release-hygiene rules the repository now
 # claims to hold. The gate exists because the review that found six unenforced
 # conventions also found that nobody was running them.
 
@@ -79,6 +80,69 @@ jobs:
 
       - name: Pytest
         run: pytest
+
+  validation:
+    name: Evidence and validation suite (ruff + pytest)
+    runs-on: ubuntu-latest
+    # `scripts/validation/` is where the measurements live, and until tonight none of it ran
+    # here: the dashboard's 28 tests were invisible to CI because pytest's default collection
+    # pattern wants `test_*.py` and the file is `test-dashboard.py`. A suite nobody runs is a
+    # suite nobody keeps, which is how `docs/CONCEPTUAL_DEBT.md` D2 was able to stay wrong.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        # The evidence tests import the product on purpose: `taxonomy` maps error classes onto
+        # the copilot's real check names, and `test_evidence.py` compares the validation
+        # harness's section list against the report model's. Both guards are worthless if the
+        # packages they import are not installed.
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest ruff PyYAML -e core/gateway -e apps/radiology_copilot
+
+      - name: Ruff (the evidence package)
+        # Scoped to `evidence/` and its tests, with the Gateway's rule set spelled out because
+        # there is no pyproject.toml above scripts/ for ruff to discover — and run from that
+        # directory, because import sorting is resolved relative to the working directory and
+        # this file's `sys.path` bootstrap is only unambiguous from there. The legacy harness
+        # files in this directory keep their own pre-existing findings; folding them in here
+        # would put someone else's cleanup inside this change.
+        working-directory: scripts/validation
+        run: |
+          ruff check --line-length 100 --select E,F,I,UP,B,C4,SIM,ASYNC \
+            evidence test_evidence.py
+
+      - name: Pytest (evidence, then the dashboard)
+        # Both files named, not one directory: the hyphenated dashboard file is not collected
+        # by default, which is the defect this step exists to close.
+        run: |
+          python -m pytest -q \
+            scripts/validation/test_evidence.py \
+            scripts/validation/test-dashboard.py
+
+      - name: The evidence instruments test themselves
+        run: PYTHONPATH=scripts/validation python -m evidence selftest
+
+      - name: Every refusal can actually fail (mutation check)
+        # Fourteen mutations, each deleting one guard — the k-anonymity floor, the repository-path
+        # refusal, the composite-score assertion, the auto-apply refusal, the fail-closed gate —
+        # and re-running the test that is supposed to catch it. A guard nobody has seen fire is a
+        # belief, and `docs/CONCEPTUAL_DEBT.md` D13 is the record of what a gate that only checks
+        # its own existence gets you. It rewrites tracked files, so it is safe here for a reason
+        # it is not safe for on a laptop: the checkout is clean by construction (the harness
+        # refuses to start otherwise) and the tree is disposable afterwards.
+        run: python scripts/validation/check-refusals.py
+
+      - name: The baseline reproduces, and refuses to be read as evidence about care
+        run: |
+          PYTHONPATH=scripts/validation python -m evidence baseline --markdown > /tmp/baseline.md
+          head -3 /tmp/baseline.md
+          grep -q "do not hand-edit the numbers" /tmp/baseline.md
+          grep -q "nothing here is evidence about care" /tmp/baseline.md
 
   validate:
     name: Configuration, compose and repository hygiene

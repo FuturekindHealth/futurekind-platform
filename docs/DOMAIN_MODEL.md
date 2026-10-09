@@ -22,9 +22,9 @@ FutureKind has, today, two vocabularies that have never been reconciled:
   Model, Approval, Audit* — which exists only in `core/gateway/` and the two
   architecture notes derived from it.
 
-The two do not overlap by a single term. `docs/ARCHITECTURE.md` contains **zero**
-occurrences of Provider, Skill, Capability, Alias, Policy, Approval, Workflow,
-Report, Knowledge, Tool, Agent, Backend or Tenant. It says *Model Router*
+The two do not overlap by a clinical term. `docs/ARCHITECTURE.md` has no occurrence of
+Provider, Skill, Capability, Alias, Workflow, Knowledge, Tool, Agent, Backend or Tenant —
+and one each of Policy, Approval and Report. It says *Model Router*
 (`:150`) and *LLM* (`:154`) where the Gateway says *Provider* and *Model*. The
 platform's own top-level document does not speak the language its most
 governance-heavy component enforces.
@@ -81,7 +81,7 @@ its own nouns, and the nouns must not cross without being named.
 
 | Context | The question it answers | Canonical nouns | Status today |
 | --- | --- | --- | --- |
-| **Clinical Documentation** | What is the medicine, and what may be written about a patient? | Patient Context, Observation, Impression, Report, Sign-off, Workflow | [ABSENT] — the `genesis/` and `agents/` placeholders that stood for it were deleted 2026-10-08 |
+| **Clinical Documentation** | What is the medicine, and what may be written about a patient? | Patient Context, Observation, Impression, Report, Sign-off, Workflow | [ABSENT] — the `genesis/` and `agents/` placeholders that stood for it were deleted 2026-10-08. **Designed 2026-10-09** in this section and in `docs/product/PRODUCT_BIBLE.md`; still no code, so the status has not moved |
 | **Platform Governance** | Was this request allowed, and what is the record? | Application, Skill, Policy, Audit, Approval, Caller | [CODE] in `core/gateway/` only |
 | **Runtime Execution** | What actually computed the answer? | Gateway, LiteLLM, Capability, Alias, Provider, Model | Split: [CODE] in the Gateway, [DOC] elsewhere |
 | **Deployment & Operations** | Whose hardware, whose data, whose rules? | Hospital, Installation, Runtime data, Health, Observability | [DOC] — prose and empty directories |
@@ -226,9 +226,9 @@ retry" is answered.
 (`ARCHITECTURE.md:104`), and it must never learn a **Skill** name
 (`gateway-routing.md`, "Forbidden").
 **Lifecycle.** A container (`compose.yaml:54` `fk-litellm`) started from
-`configs/litellm/config.yaml`. Not yet integrated: `services/ai/litellm/` exists
-as an empty directory, so the path cited by `gateway-routing.md:26` names a place
-with nothing in it.
+`configs/litellm/config.yaml`. Not yet integrated: the path cited by
+`gateway-routing.md:26` — `services/ai/litellm/` — names no directory in this
+repository, because there is no `services/` tree at all.
 **Relationships.** Resolves **Alias** → **Model** + **Provider**; is the only
 **Provider** the Gateway should implement against.
 **Banned synonyms.** "Model Router" (`ARCHITECTURE.md:150`) — that is a hop
@@ -523,7 +523,7 @@ words, never interchangeable. See R4 and Q5.
 reason from — guidelines, prior reports, protocol documents.
 **Purpose.** To ground statements instead of inventing them.
 **Owner.** FutureKind Services (`services/knowledge/crawl4ai`,
-`services/knowledge/searxng`, `services/vector/qdrant` exist as empty dirs), with
+`services/vector/qdrant` are named here and exist nowhere — the tree has no `services/`),
 the Hospital as the authority on *what is adopted*.
 **Public / internal.** Neither today: it has no interface. `Open WebUI`
 (`configs/futurekind.yaml:44`) is called `interface`, which conflates a human UI
@@ -536,7 +536,7 @@ concept.
 a **Tool** retrieves from it.
 **Evidence.** One occurrence in the repository: the heading "Clinical knowledge layer"
 in the 2026-10-07 engineering audit (an internal working paper, not published here).
-*Corpus*, *memory* and *grounding* have no occurrence at all.
+*Corpus* and *memory* have no occurrence; *grounding* is a shipped copilot field.
 **Rule to adopt.** Knowledge is the *content*; Qdrant/SearXNG/Crawl4AI are
 *providers of access* to it. Never call a vector store "the knowledge".
 
@@ -592,6 +592,166 @@ wanted the same job. The directory is gone as of 2026-10-08, but the collision i
 not resolved by deletion: whoever authors the clinical layer will still have to
 answer whether a clinician chose a Skill or an Agent chose it. R4 states the rule;
 it must be applied before any of that is built.
+
+#### The objects the product family needs — all **[ABSENT]**, proposed
+
+`docs/product/PRODUCT_BIBLE.md` designs fourteen applications over these objects. It owns the
+applications; this section owns the words, because P18 (`docs/CONSTITUTION.md:413-414`) says a
+concept has one owner and `:422-424` says a new domain term without a row here is an incomplete
+change. Every entry below is **[ABSENT]** in the same sense the entries above it are: proposed
+from the design, with no referent in code yet. The fields match the entries above, and where an
+object already has a home in the ERP, the citation is to the integration record rather than to a
+wish.
+
+##### Study — [ABSENT]
+
+**Definition.** One examination performed on one patient at one moment: a modality, a protocol,
+an accession, and — for imaging — the series that came out of it.
+**Purpose.** To be the thing a **Report** is written *about*, so that "which study" is answerable
+without restating the patient.
+**Owner.** The department that performs it; recorded in the ERP (`radiology_studies`,
+`docs/integration/INTEGRATION_CARE_ERP_PACS.md:306-307`).
+**Lifecycle.** Ordered → performed → reported → archived. A Study exists whether or not anyone
+writes about it.
+**Relationships.** One Study → zero or more **Reports**; a Study belongs to one Patient Context;
+a **Comparison** is a relationship between two Studies, never a field of one.
+**Careful.** Pathology's sibling is a **Specimen**, not a Study. Do not invent an umbrella class
+for both: `SPEC-15-02` refuses a new abstraction with no data behind it, and the two have
+different lifecycles (a specimen is consumed by being examined; a study is not).
+
+##### Diagnosis — [ABSENT]
+
+**Definition.** A named clinical conclusion asserted about a patient — a disease, a syndrome, or
+an explicitly stated exclusion of one.
+**Purpose.** To separate *the claim* from *the section it is written in*, which is what lets a
+problem list, an impression and a discharge summary carry the same diagnosis without three copies
+of it.
+**Owner.** The clinician who asserts it. Never a Skill (`docs/CONSTITUTION.md:285-287`).
+**Lifecycle.** Asserted → supported or superseded → carried on a problem list → closed.
+**Relationships.** Appears inside an **Impression**, a **Report** section, or a problem list; is
+evidenced by **Observations**; may generate a **Recommendation**.
+**Careful.** An **Impression** is a document part; a Diagnosis is a claim. Radiology's impression
+usually *contains* diagnoses and often contains none ("no acute intracranial process"). Both
+words are needed, and they are not synonyms — see R5.
+
+##### Recommendation — [ABSENT]
+
+**Definition.** Advice about what should happen next, written by the reporting or treating
+clinician: a test, a referral, a interval, a management step.
+**Purpose.** To make advice separable from observation, so a follow-up interval can be counted,
+booked, or missed — none of which is possible while it is a clause inside a paragraph.
+**Owner.** The signing clinician.
+**Lifecycle.** Drafted → edited → signed → (optionally) becomes a **FollowUp** when someone owns
+and books it.
+**Relationships.** Lives in a **Report** section; becomes a **Task** or a **FollowUp** when it is
+owned and timed; a Recommendation that is never owned is the product's most common silent
+failure.
+**Careful.** The radiology document already has *two* advice sections
+(`recommendations` and `follow_up`, `apps/radiology_copilot/src/futurekind_radiology/report.py:48`).
+That is a section distinction, not two objects: the difference between them is whether an interval
+and an owner exist. Any application that renders advice must render it once.
+
+##### Procedure — [ABSENT]
+
+**Definition.** A clinical act performed on a patient: an operation, an intervention, an
+anaesthetic, a sampling event.
+**Purpose.** To let an operative note, a complication and an implant all point at the same act.
+**Owner.** The performing clinician; recorded in the ERP.
+**Lifecycle.** Planned → consented → performed → documented → follow-up.
+**Relationships.** Documented by a **Report**; may produce **Observations**; may cause a
+complication, which is an Observation plus a claim of relationship.
+**Careful.** Ordering and dispensing a procedure are out of the platform's scope
+(`docs/SPECIFICATION.md:140-144`). A Procedure here is a *read* of the hospital's record plus the
+document written about it — nothing in this family schedules.
+
+##### Medication — [ABSENT]
+
+**Definition.** A drug, dose, route, frequency and start/stop time, as recorded for one patient.
+**Purpose.** So that a reconciliation, a review or a discharge list compares against a record
+rather than against a dictation.
+**Owner.** Pharmacy and the treating clinician.
+**Relationships.** Reviewed by a **Report** (`medication-reconciliation`); a **Task** may arise
+from it.
+**Hard boundary.** **Read-only for every application in this family.** The platform may not
+order, dispense, stop or substitute a medication, and the out-of-scope list
+(`docs/SPECIFICATION.md:140-144`) already says so. A copilot that *drafts text about* medications
+is inside the design; one that writes to a medication administration record is not.
+
+##### Task — [ABSENT]
+
+**Definition.** Work with an owner and a due condition: a recall, a booking, a critical-value
+action, a follow-up to be done.
+**Purpose.** To make a signed statement that requires action leave a trace that can be chased.
+Without it, "recommend MRI in 6 months" is a sentence with no mechanism and no metric.
+**Owner.** The application that creates it; the system of record is the hospital's.
+**Lifecycle.** Created → assigned → done or overdue.
+**Relationships.** Generated by a **Recommendation**, a critical **Observation**, or a
+**Notification** that must be answered; belongs to a patient, not to a document.
+**Careful.** A Task is FutureKind's least-liked object, because a task engine is a second system
+of record waiting to happen. It is listed here because the library already contains the skills
+that create one (`radiology-critical-value-alert`) and the workflow step that needs one (S10,
+`docs/product/RADIOLOGY_WORKFLOW.md:349`). The design answer in
+`docs/product/CLINICAL_SUITE.md` is: **the ERP owns the task; an application may only propose
+one.**
+
+##### Notification — [ABSENT]
+
+**Definition.** The record that a named person was told a thing, at a time, by a route, and
+whether it was acknowledged.
+**Purpose.** To separate *informing* from *acting*: a critical result that nobody can prove was
+delivered is the incident S10 describes, and a notification is the only artefact that answers a
+medicolegal question about it.
+**Owner.** The clinical domain; the transport belongs to the hospital.
+**Relationships.** Carries a **Task** or a critical **Observation**; produces an **Audit** record;
+is *not* a **Report**.
+**Careful.** The platform cannot verify a delivery today: `ARCHITECTURE.md:307` says audit is
+emitted and not retained, and `docs/SPECIFICATION.md:900` makes that ADR-0003's decision. A
+notification product before retention is a promise nobody can keep.
+
+##### Comparison — [ABSENT]
+
+**Definition.** A statement about two Studies or two time points, made with both named.
+**Purpose.** To give the hardest sentence in radiology and pathology a place to live. The engine
+already refuses the words without the referent — "unchanged from prior" with no prior supplied
+(`docs/product/RADIOLOGY_WORKFLOW.md:453`) — and `_check_history` is the check that enforces it
+(`apps/radiology_copilot/src/futurekind_radiology/quality.py:336`).
+**Owner.** The reporting clinician; it is the one object whose evidence is a second study.
+**Relationships.** Requires two **Studies** (or two time points of one measurement); supports or
+contradicts an **Observation**; the reason the Comparison Viewer exists as a screen
+(`docs/product/UI_UX.md:143`).
+**Careful.** A Comparison is not a field on a Report. A study with no available prior cannot hold
+one, and the product must say *no prior available* rather than leaving the sentence out.
+
+##### Approval — [DOC], restated for the family
+
+Already defined above and under constitutional rule (`docs/CONSTITUTION.md:460`: "a record with an
+author, never a request field"). What the family adds is only the **application-side substitute**
+in force until ADR-0005: a copilot records the signer, the moment, and which sections it changed,
+into the system of record that already refuses a machine signer
+(`docs/integration/INTEGRATION_CARE_ERP_PACS.md:252`), and every document that relies on it names
+that reliance rather than implying the platform verified it (`docs/SPECIFICATION.md:507-516`).
+
+##### What is deliberately *not* an object
+
+Three things the design brief named are views or documents, and inventing entities for them is
+how a data model rots:
+
+| Named as an object | Is | Where it lives |
+| --- | --- | --- |
+| **Patient Timeline** | A read-model: existing objects ordered by their own timestamps | `docs/product/PRODUCT_BIBLE.md` §3.2, application #10 |
+| **Audit Timeline** | The same read-model, for a different reader and retention | Application #11, a view of #10 |
+| **Incidental finding** | An **Observation** plus a route by which it was not asked for | A property of how the Observation entered the Report, in `docs/product/CLINICAL_SUITE.md` §2 |
+
+**Finding versus Observation — decided.** The canonical noun for "a thing seen or measured" stays
+**Observation**; the terminology table in §4 records it as found nowhere else in the repository,
+which makes this a naming *opportunity* rather than a migration. **Findings** remains the name of
+the *section* a clinician types, because that is what radiologists and the ERP both already call
+it. The consequence is uncomfortable and
+worth stating where it is true: in the built copilot, `QualityFinding` and `quality.findings`
+(`apps/radiology_copilot/src/futurekind_radiology/report.py:288-306`) are the *machine's audit
+issues*, sitting in the same file as the report's `findings` section (`:376`). R5 says the clinical
+sense owns the word. Renaming `quality.findings` is a wire-contract change to a shipped document
+and is not done in design; it is recorded as a numbered debt in §7 R5, with the cost.
 
 ### Deployment & Operations
 
@@ -687,6 +847,9 @@ uses it is named, because a rename without a citation is a rumour.
 | Service that decides permission | **Gateway** | gateway (meaning LiteLLM), API, router | `ARCHITECTURE.md:54`; `configs/futurekind.yaml:40` — the collision this row recorded was fixed by Sprint 6 |
 | Layer that chooses the model | **LiteLLM** | Model Router, routing | `ARCHITECTURE.md:150`; `configs/futurekind.yaml:42` (`routing: LiteLLM`, Sprint 6) |
 | Software a clinician uses | **Application** | client, module, interface, app, caller | `ARCHITECTURE.md:32`; `CONTRIBUTING.md:33`; `configs/futurekind.yaml:44` |
+| Application that drafts a document | **Copilot** | assistant, bot, draft tool | `docs/product/PRODUCT_BIBLE.md` §2 — the only kind with a review-and-sign gate |
+| Application that arranges existing objects | **Surface** | dashboard, viewer, report screen | `docs/product/PRODUCT_BIBLE.md` §2. Its failure mode is a silent absence, not a wrong sentence |
+| Application that answers for the institution | **Console** | admin panel, MIS, analytics | `docs/product/PRODUCT_BIBLE.md` §2. Its failure mode is a metric nobody defined |
 | Identity in one request | **Caller** | user, key, client | `deps.py:67,122` |
 | Organisation owning the data | **Hospital** | organization, tenant, facility, site | `ADR-0001:54`; `configs/futurekind.yaml:14` |
 | Running instance | **Installation** | deployment, runtime | `configs/futurekind.yaml:24`; `deployment/`; `:56` |
@@ -699,6 +862,16 @@ uses it is named, because a rename without a citation is a rumour.
 | Curated citable material | **Knowledge** | vector store, search, corpus | `configs/futurekind.yaml:40-46` |
 | Bounded action an agent may take | **Tool** | *(none — absent)* | only `[tool.hatch]`, `core/gateway/pyproject.toml:36` |
 | Clinical persona owning skills | **Agent** | skill, specialty folder | prose only — `agents/` was stubs and is deleted |
+| Examination performed on a patient | **Study** | exam, scan, investigation | `docs/integration/INTEGRATION_CARE_ERP_PACS.md:306-307` (`radiology_studies`) |
+| Tissue or sample examined | **Specimen** | sample, biopsy, block | `docs/product/SKILL_LIBRARY.yaml:973` (`inputs: specimen, site, …`); no code yet |
+| Named clinical conclusion | **Diagnosis** | impression, finding, code | `docs/product/SKILL_LIBRARY.yaml:974` ("ending in a diagnosis line") |
+| Advice about what should happen next | **Recommendation** | advice, plan, remark | `apps/radiology_copilot/src/futurekind_radiology/report.py:48` |
+| Advice with an owner and an interval | **FollowUp** | recall, review, recommendation | `apps/radiology_copilot/src/futurekind_radiology/report.py:48` (`follow_up`) |
+| Act performed on a patient | **Procedure** | operation, intervention, surgery | `docs/product/SKILL_LIBRARY.yaml:835` (`operative-note-draft`) |
+| Drug as recorded for a patient | **Medication** | drug, prescription, line | `docs/product/SKILL_LIBRARY.yaml:810` (`medication-reconciliation`) |
+| Work with an owner and a due condition | **Task** | action item, recall, pending item | *(no referent here; the ERP's `generateAiForTask` is an AI job — `docs/integration/AI_ENTRY_POINTS_CARE_ERP.md:79`)* |
+| Proof a named person was told | **Notification** | alert, message, ping | `docs/product/SKILL_LIBRARY.yaml:129` (`radiology-critical-value-alert`) |
+| Statement across two studies or time points | **Comparison** | prior, old study, "unchanged" | `apps/radiology_copilot/src/futurekind_radiology/quality.py:336` |
 | Record of what was allowed | **Audit** | log, trail, telemetry | `ARCHITECTURE.md:56,118`; `service.py:316` |
 | Message authorship | **Message role** | role | `schemas.py:19` |
 | Human authorship | **Permission / clinical role** *(unbuilt)* | role, permissions | `ARCHITECTURE.md:62` |
@@ -926,6 +1099,14 @@ binds whoever re-authores the clinical layer, and must be settled before then.
 Reason: the collision is structural. An empty tree was the only reason it had not
 hurt yet; a deleted tree removes the artefact, not the ambiguity.
 
+*Adopted 2026-10-09 (Genesis Night 3), with the shape decided:* an Agent **gets no
+directory**. It is the name for the four specialty-authoring files an application already
+has — the system turn, the study structures, the document shape and ownership rule, and the
+list of skills the application may name — which is exactly what `apps/radiology_copilot/`
+ships today. The clinical question "did a clinician choose a Skill or did an Agent choose
+it" is answered in the product: the clinician chose the application, the application named
+the skill, and the record says which. See `docs/product/PRODUCT_BIBLE.md` §6.1.
+
 **R5 — One artefact vocabulary: Report contains Observations and concludes with
 an Impression; rename the docs' "Finding".**
 Today `models.yaml:58` calls the artefact an impression and `:72` a report;
@@ -934,6 +1115,18 @@ to mean *audit issue*. Fix: skill descriptions name the artefact consistently
 ("Draft or review the impression section of a radiology report"), and engineering
 documents say **audit issue** / **debt item**, leaving **Finding** free for its
 clinical sense. Doc-only, low risk, high clarity.
+
+*Adopted 2026-10-09, with one exception found while naming the objects.* The doc half is
+free and is now the rule: engineering prose says **audit issue**. The rename is *not*
+doc-only, and pretending it was would be exactly the kind of understated defect this
+register exists to catch. `apps/radiology_copilot/src/futurekind_radiology/report.py:288-306`
+publishes the machine's audit issues as `quality.findings`, in the same file as the report's
+`findings` section at `:376`. Renaming the first is a wire-contract change to a shipped
+document — it moves a field in `/draft`, `/check` and `/review`, the screen that renders it,
+and every golden assertion that reads it. It is therefore recorded as a deletion item in
+`docs/product/ROADMAP.md` §10, to be done with a feature that can carry it, not in prose.
+Meanwhile the ambiguity is contained by one rule: **`findings` next to a section name is
+prose the clinician typed; `findings` inside `quality` is the machine's objection.**
 
 **R6 — Keep Application (the domain noun) and Caller (the per-request role), and
 say so in `ARCHITECTURE.md`.** No rename; a documented distinction. Reason:
@@ -975,7 +1168,7 @@ it named, which was deleted rather than left empty (R10). `README-FIRST-DEPLOY.m
 was rebuilt earlier in the same pass.
 
 **R10 — Empty directories must either earn a name or go.**
-`core/{audit,auth,cli,config,notifications,sdk}` and all of `services/*` exist as
+`core/{audit,auth,cli,config,notifications,sdk}` and all of `services/*` were
 empty dirs — and those names are the only place the platform states what those
 components will be. Decision: keep `services/ai/litellm` and
 `services/knowledge/*` (they name a real ADR-0002 plan), and make the directory
@@ -1009,9 +1202,9 @@ R9. Rewrite `ARCHITECTURE.md`'s chain to the canonical one:
 `Application → Gateway → LiteLLM → Provider → Model`, matching ADR-0002 and
 `gateway-routing.md:18`, and state once, in that file, that LiteLLM's
 `model_name` *is* what this document calls an Alias.
-*Verify:* `grep -rn "Model Router\|Cloud AI providers" docs/` returns only
-historical ADR text; the two architecture docs and `ARCHITECTURE.md` agree on the
-chain; tests untouched and still 380.
+*Verify:* `grep -rn "Model Router\|Cloud AI providers" docs/` still finds
+`ARCHITECTURE.md:150`, so R2 and R3 are recorded as open, not applied. The
+sweep that closes them is M1 above. Tests untouched and not re-counted here.
 *Must not change:* the accepted decision text of ADR-0002 (it is a record, not a
 draft — corrections belong in a new ADR or an amendment note).
 
@@ -1091,6 +1284,13 @@ Decisions I could not make as an engineer, each blocking a stage above.
    ever reach the Gateway?** Nothing in the repository answers this, and the only
    MRN-shaped string in it is a test fixture. Blocks M3 and every clinical
    concept.
+   *Position taken in design, 2026-10-09, not an answer:* the application holds the
+   Patient Context and the Gateway never receives one. `apps/radiology_copilot/src/futurekind_radiology/submission.py:15`
+   states the rule in code — "There is deliberately **no patient identifier field**" — and
+   `docs/ARCHITECTURE.md:254` repeats it in the module map. What remains genuinely
+   unresolved is the *identifier format* — a clinical and hospital decision, and the reason
+   `docs/product/PRODUCT_BIBLE.md` refuses to design the Timeline (application #10)
+   further than a read-model until this lands.
 3. **Q3 — Where does the audit record live, and for how long?** `disable_spend_logs:
    true` (`configs/litellm/config.yaml:22`) plus an empty `core/audit` means the
    platform can currently emit but not retain. For a medicolegal system that may
@@ -1101,10 +1301,77 @@ Decisions I could not make as an engineer, each blocking a stage above.
 5. **Q5 — Is a Workflow owned by FutureKind or by the host EHR (CARE ERP)?**
    `ARCHITECTURE.md:36` lists CARE ERP as an application; a sign-off workflow
    that lives in two systems will diverge.
+   *Position taken in design, 2026-10-09:* **the EHR owns it, and FutureKind owns
+   nothing that outlives a request.** The radiology copilot is already built on that
+   rule — stateless operations, the document travelling through the caller, the Report
+   stored in the ERP (`docs/ARCHITECTURE.md:268-271`) — and `docs/clinical/HOSPITAL_WORKFLOW.md`
+   §6 applies the same rule to every department, including the ones that will find it
+   inconvenient. The unresolved half of Q5 is real: a *workflow engine* (advancing
+   stages, timeouts, escalation) then has to be the ERP's, and the platform's only
+   workflow-shaped artefact is a Skill's policy. If the owner decides FutureKind should
+   hold stage state, that is an ADR and a second system of record, and this document
+   will have to say which of the two owns a signed report.
 6. **Q6 — Are the four `clinical_risk` values in `models.yaml:62-102` the
    clinician's judgement, or mine?** They are live configuration today. I
    assigned them. They should be confirmed or corrected by the clinical owner
    before the Gateway is used for real work.
+
+## 11. Ownership of truth (Genesis Night 4)
+
+This document has always said what a word *means*. It has never said, for each class of
+fact, three things at once: which file defines it, which files may restate it, and **what
+fails when they disagree.** The third column is the one the platform is short of, and it is
+the reason [`CONCEPTUAL_DEBT.md`](CONCEPTUAL_DEBT.md) exists at all.
+
+| Class of fact | Defined in | May restate it | What fails when they disagree |
+| --- | --- | --- | --- |
+| Routing reality: skill → capability → alias → model | `core/gateway/models.yaml` + `configs/litellm/config.yaml` | Any document may *point* | **The boot fails loudly.** `litellm_config.py` compares the two and refuses to start. This is the template every row below should reach. |
+| Policy per skill (`clinical_risk`, approval, audit, downgrade) | `models.yaml` | `architecture/gateway-policy.md` | The catalogue loader refuses the illegal combinations. Real. |
+| The meaning of a clinical noun | this file | everything | **Nothing.** A banned synonym in shipped code (D10) is found by reading, not by a gate. |
+| A document's section shape | `report.py` `SECTION_KEYS` | the screen; the validation tools *copy* it | Nothing. Five lists, no comparison (D6). |
+| The prompt text | `prompt.py` | `product/PROMPT_LIBRARY.md` §1 holds a copy | A pinned version string — which is a copy of a copy (D7). |
+| Test and citation counts | `CHANGELOG.md`, dated | nothing should | Nothing, and six documents were wrong or about to be (D2). |
+| Version numbers | each package's `__init__.py` | `ARCHITECTURE.md:313`, `configs/futurekind.yaml` | A mismatch nobody checks (D11). |
+| The clinical never-list | `clinical/HOSPITAL_WORKFLOW.md` §5 | `safety/CLINICAL_SAFETY.md` | Nothing yet: G3 requires a refusal path plus a test, and only radiology has one. |
+| What a correct report looks like | `product/GOLDEN_DATASET.yaml` | prose counts its cases | Nothing; prose counts drift (D2 again). |
+| What a deployment runs | `compose.yaml` | `configs/futurekind.yaml` advertises six components no process reads | Nothing, because that file has no reader (D3). |
+
+Two rules follow, and they belong to the naming authority because both are statements
+about which artefact is the referent of a word:
+
+> **A fact that moves has one home. Documents point; they do not copy.**
+> **A class of fact with no mechanism in the third column is either given one or deleted —
+> not maintained.** Maintained prose is the most expensive kind of duplicate, because it
+> looks like documentation and behaves like an interface nobody can compile.
+
+### Verification of the first rule, as it stands tonight
+
+`DOMAIN_MODEL.md` proved its own founding claim by counting words in another document, and
+those counts went stale while the argument stayed correct. Corrected 2026-10-09 in
+`52bf45f`, and the class of error is now named rather than patched instance by instance: a
+proof that is a measurement must be re-run by a command or removed.
+
+---
+
+## 12. Three objects stage 4 needs, and none of them is a schema
+
+The platform works today as one application behind one gate. It cannot become what
+[`BLUEPRINT.md`](BLUEPRINT.md) §1 calls stage 4 — a hospital's AI evidence layer — without
+three nouns that do not exist anywhere, in code or in this model. They were not forgotten.
+Each was *refused* by a deliberate design choice, and the refusal is right until the second
+site arrives.
+
+| Object | Status | Definition | Why nothing already in the model covers it | Blocked by |
+| --- | --- | --- | --- | --- |
+| **Hospital** | [ABSENT] | The unit of sovereignty: the legal entity that owns a deployment, its data, its retention period and its clinical authority. | `Skill` is a capability with policy, not a tenant. A `Study` belongs to a department, not to an institution. P14 forbids a cross-hospital data path with no subject to scope it to, so the prohibition is currently unenforceable rather than satisfied. | ADR-0007 (named, unwritten) |
+| **Actor** | [ABSENT] | A named human with a role, a session and the capacity to sign. Distinct from a credential. | `AuthenticatedCaller` authenticates a *deployment*. Provenance records which skill, alias and model answered — and cannot record who asked, which is the one field a medicolegal question needs first. The whole `approval_required` path is unreachable for the same reason. | ADR-0004, ADR-0005 |
+| **Record** | [ABSENT] | What survives a request, for how long, in whose custody, and who may destroy it. | `Report` is a document shape owned by the EHR. `skill_audit` is a log line owned by the Gateway. Neither is a retention promise, and the gap between "emitted" and "retained" is §7 row 4 of the constitution. | ADR-0003 |
+
+**Naming ruling, applied prospectively.** When these arrive they take the names above:
+*Hospital*, *Actor*, *Record*. The banned synonyms are the ones already circulating in
+prose — *tenant*, *org*, *site* for Hospital; *user*, *clinician*, *principal* for Actor;
+*log*, *audit*, *history* for Record. A class with five names in the documents will acquire
+five implementations in the code, which is the exact failure this file exists to prevent.
 
 ---
 

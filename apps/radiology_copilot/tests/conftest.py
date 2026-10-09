@@ -2,8 +2,13 @@
 
 Nothing in ``tests/`` except ``test_end_to_end.py`` starts a process, opens a port
 or asks a model anything. The clinical behaviour under test is this application's
-own — parsing, refusing, reviewing, rendering — and it has to be provable from a
-fixture rather than from whatever a deployment happens to say today.
+own — parsing, checking, refusing, reviewing, rendering — and it has to be provable
+from a fixture rather than from whatever a deployment happens to say today.
+
+Each golden answer carries the submission it was drafted from. That is not
+bookkeeping: the quality checks compare a draft against what was submitted, so a
+fixture answer paired with the wrong dictation produces findings about a study
+nobody described — a test failure that means nothing.
 """
 
 from __future__ import annotations
@@ -36,13 +41,102 @@ RADIOLOGY_POLICY = {
     "allow_downgrade": False,
 }
 
+#: The study each fixture answer was written for, taken from the matching case in
+#: ``docs/product/GOLDEN_DATASET.yaml`` where one exists. The dictated text carries
+#: every number the answer quotes, because a fixture that does not would make the
+#: measurement check test the fixture rather than the product.
+GOLDEN_SUBMISSIONS: dict[str, dict[str, Any]] = {
+    "normal_ct_head.json": {},
+    "hypertensive_bleed.json": {
+        "clinical_indication": "58-year-old, sudden severe headache with vomiting, "
+        "declining consciousness",
+        "modality": "CT",
+        "study": "CT HEAD WITHOUT CONTRAST",
+        "findings": "Large hyperdense collection in the left basal ganglia and internal "
+        "capsule, 4.5 cm maximum, with intraventricular extension filling the lateral and "
+        "third ventricles. Surrounding hypodense oedema, effacement of the left lateral "
+        "ventricle, rightward midline shift 9 mm, subfalcine herniation. Basal cisterns "
+        "compressed. No extra-axial collection.",
+    },
+    "nph_hydrocephalus.json": {
+        "findings": "Prominent cortical sulci and enlarged lateral ventricles out of "
+        "proportion to the sulcal widening at the high convexity. Periventricular and deep "
+        "white matter hypodensities of chronic small vessel ischaemic change. A 6 mm lacunar "
+        "hypodensity in the right caudate head. No haemorrhage, mass or acute extra-axial "
+        "collection.",
+    },
+    "mri_brain_normal.json": {
+        "clinical_indication": "45-year-old, chronic headache, no neurological deficit",
+        "modality": "MRI",
+        "study": "MRI BRAIN WITH AND WITHOUT CONTRAST",
+        "findings": "Normal grey-white matter. No mass, no abnormal enhancement. Normal "
+        "ventricular size and morphology. No white matter lesions. Pituitary normal. No "
+        "sinus disease. Hippocampi, brainstem and cerebellum normal. No midline shift.",
+        "technique": "MRI brain with and without intravenous contrast; axial T2, FLAIR, DWI "
+        "and post-contrast T1 sequences.",
+    },
+    "mri_brain_abscess.json": {
+        "clinical_indication": "8-year-old, 5 days fever, headache, left temporo-parietal "
+        "swelling, GCS 12",
+        "modality": "MRI",
+        "study": "MRI BRAIN WITH CONTRAST",
+        "findings": "Left mastoid opacification with erosion. 18 mm rim-enhancing left "
+        "temporal collection with restricted diffusion, 6 mm adjacent cerebritis, 7 mm "
+        "midline shift. Sigmoid sinus not enhancing. Ventricles compressed on the left, "
+        "basal cisterns patent.",
+        "technique": "MRI brain with contrast; axial T1, T2, FLAIR and DWI with post-contrast "
+        "sequences.",
+    },
+    "mri_brain_epilepsy.json": {
+        "clinical_indication": "26-year-old, focal seizures with impaired awareness, "
+        "MRI ordered twice",
+        "modality": "MRI",
+        "study": "MRI BRAIN EPILEPSY PROTOCOL",
+        "findings": "Right hippocampus small with increased T2 and FLAIR signal, loss of "
+        "internal architecture. Temporal horn mildly asymmetric. No mass. Thin temporal lobe "
+        "with a 4 mm focal cortical irregularity on the adjacent gyrus, not certain.",
+        "technique": "MRI brain, dedicated epilepsy protocol with thin cut coronal FLAIR and "
+        "T1 sequences through the hippocampi.",
+        "previous_reports": [
+            {
+                "reported_on": "4 months ago",
+                "modality": "MRI",
+                "study": "MRI BRAIN EPILEPSY PROTOCOL",
+                "report": "Right hippocampal signal abnormality consistent with sclerosis. "
+                "No mass.",
+            }
+        ],
+    },
+}
+
 
 def fixture_text(name: str) -> str:
     return (FIXTURE_DIR / name).read_text(encoding="utf-8")
 
 
+#: The twelve things a draft must return, in the order the document carries them:
+#: the six signed sections, the quality pass and the confidence computed from it,
+#: then the record of how the draft was made and governed. This is the product's
+#: output contract, spelled out once so a test can fail against the contract rather
+#: than against whatever the model happens to have written into `RadiologyReport`.
+REQUIRED_OUTPUT = (
+    "clinical_indication",
+    "technique",
+    "findings",
+    "impression",
+    "recommendations",
+    "follow_up",
+    "quality",
+    "confidence",
+    "metadata",
+    "model_provenance",
+    "skill",
+    "policy",
+)
+
+
 def golden(name: str) -> dict[str, str]:
-    """A golden answer, as the five-section dict the model wrote."""
+    """A golden answer, as the section dict the model wrote."""
     return json.loads(fixture_text(name))
 
 
@@ -113,27 +207,61 @@ def submission(**overrides: Any) -> StudySubmission:
     return StudySubmission(**payload)
 
 
+def submission_for(fixture: str, **overrides: Any) -> StudySubmission:
+    """The submission this fixture answer was written for."""
+    payload = dict(GOLDEN_SUBMISSIONS.get(fixture, {}))
+    payload.update(overrides)
+    return submission(**payload)
+
+
 def drafted_report(
-    *, content: str | None = None, **overrides: Any
+    fixture: str = "normal_ct_head.json",
+    *,
+    content: str | None = None,
+    **overrides: Any,
 ) -> tuple[RadiologyReport, StubGateway]:
     """A report that has been drafted through the copilot, but not reviewed.
+
+    `content` replaces the model's answer while `fixture` still chooses the study it
+    was answered for, because most of these tests are about an answer that does not
+    match its own dictation.
 
     Sync on purpose: the suite drives the coroutine with ``asyncio.run`` rather
     than depending on an asyncio plugin, which is how the Gateway's own tests do it.
     """
-    text = fixture_text("normal_ct_head.json") if content is None else content
+    study = overrides.pop("study", None) or submission_for(fixture)
+    text = fixture_text(fixture) if content is None else content
     copilot, stub = make_copilot(completion(text, **overrides))
-    return asyncio.run(copilot.draft(submission())), stub
+    return asyncio.run(copilot.draft(study)), stub
 
 
 @pytest.fixture
-def draft_report() -> RadiologyReport:
+def ct_submission() -> StudySubmission:
+    return submission_for("normal_ct_head.json")
+
+
+def signed_copy(
+    report: RadiologyReport, study: StudySubmission, **kwargs: Any
+) -> RadiologyReport:
+    """A signed copy of `report`, checked against the submission it came from.
+
+    Every fixture that needs a signature has to supply the study too, which is the
+    point: the checks re-run at sign-off, and a test that signed a report against
+    nothing would be testing a path the product refuses.
+    """
+    copilot, _ = make_copilot(completion(fixture_text("normal_ct_head.json")))
+    return copilot.review(
+        report, decision="signed", clinician="Dr A. Nair", submission=study, **kwargs
+    )
+
+
+@pytest.fixture
+def draft_report(ct_submission: StudySubmission) -> RadiologyReport:
     """The golden draft, assembled for the review and rendering tests."""
     report, _ = drafted_report()
     return report
 
 
 @pytest.fixture
-def signed_report(draft_report: RadiologyReport) -> RadiologyReport:
-    copilot, _ = make_copilot(completion(fixture_text("normal_ct_head.json")))
-    return copilot.review(draft_report, decision="signed", clinician="Dr A. Nair")
+def signed_report(draft_report: RadiologyReport, ct_submission: StudySubmission) -> RadiologyReport:
+    return signed_copy(draft_report, ct_submission)

@@ -33,6 +33,7 @@ from fastapi.responses import JSONResponse
 
 from futurekind_radiology.api import build_app
 from futurekind_radiology.settings import CopilotSettings
+from tests.conftest import REQUIRED_OUTPUT
 
 REPO = Path(__file__).resolve().parents[3]
 GATEWAY_ROOT = REPO / "core" / "gateway"
@@ -242,16 +243,17 @@ def test_one_clinical_request_travels_the_whole_platform(stack: dict[str, Any]) 
 
     assert response.status_code == 200, response.text
     report = response.json()
-    assert tuple(report) == (
-        "clinical_indication",
-        "technique",
-        "findings",
-        "impression",
-        "recommendations",
-        "metadata",
-        "model_provenance",
-        "skill",
-        "policy",
+    assert tuple(report) == REQUIRED_OUTPUT
+
+    # The two blocks Sprint 9 added travel the same two HTTP hops as the sections,
+    # so a screen reading the wire sees the checks and the computed confidence
+    # rather than having to ask for them separately.
+    assert report["quality"]["status"] in ("clear", "advisory", "blocking")
+    assert report["quality"]["checks_run"]
+    assert report["confidence"]["level"] in (
+        "supported",
+        "review-carefully",
+        "not-safe-to-sign",
     )
 
     assert report["skill"] == {"name": "radiology-report", "capability": "reasoning"}
@@ -315,7 +317,14 @@ def test_the_draft_is_not_exportable_until_a_clinician_signs_it(stack: dict[str,
     signed = post(
         stack,
         "/review",
-        {"report": report, "decision": "signed", "clinician": "Dr A. Nair"},
+        {
+            "report": report,
+            "decision": "signed",
+            "clinician": "Dr A. Nair",
+            # Signing re-runs the checks, so the submission travels with the
+            # signature over the wire exactly as the screen sends it.
+            "submission": draft_payload()["submission"],
+        },
     )
     assert signed.status_code == 200
 

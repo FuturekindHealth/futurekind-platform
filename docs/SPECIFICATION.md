@@ -246,7 +246,7 @@ the first failure shall execute:
 6. record provenance and audit, then answer
 
 *Source:* Constitution P1, P2, P6, P16; implementation `GatewayService.handle` and
-nothing else. `[BUILT]` — 482 tests cover this path, and both doors (`POST /chat`
+nothing else. `[BUILT]` — the committed Gateway suite covers this path, and both doors (`POST /chat`
 and `POST /v1/chat/completions`) reach stage 3 through the same function, so a
 stage cannot be reordered for one transport without failing the other's tests.
 
@@ -882,7 +882,7 @@ unblocked now, with every decision it needs already taken:
    this is an empty page rather than a folder of empty files.
 6. **Wording honesty in the remaining documents.** SPEC-09-03, 13-01, 14-07 and
    register rows 4, 6 and 7 of `CONSTITUTION.md §7`; `ARCHITECTURE.md:150-154`'s
-   "Model Router / LLM" chain now matches the platform again, but the audit and
+   "Model Router / LLM" chain still names a hop the platform does not have, and the audit and
    tracing claims still do not.
 
 The common shape has not changed since Sprint 5 wrote it, and Sprint 6 is evidence
@@ -926,7 +926,7 @@ contractual judgement untouched.
 ---
 
 **Conformance note.** This specification states what FutureKind is *required* to be.
-Where it says `[BUILT]`, the claim is carried by the committed test suite — 482 tests
+Where it says `[BUILT]`, the claim is carried by the committed test suite — every test
 in `core/gateway/tests/`, passing with `ruff check` clean as of Sprint 6
 (2026-10-07). Of those, `test_end_to_end.py` is the part that makes the phrase mean
 something: it starts the production Gateway and a stub LiteLLM on loopback ports and
