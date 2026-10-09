@@ -127,6 +127,16 @@ jobs:
       - name: The evidence instruments test themselves
         run: PYTHONPATH=scripts/validation python -m evidence selftest
 
+      - name: Every refusal can actually fail (mutation check)
+        # Fourteen mutations, each deleting one guard — the k-anonymity floor, the repository-path
+        # refusal, the composite-score assertion, the auto-apply refusal, the fail-closed gate —
+        # and re-running the test that is supposed to catch it. A guard nobody has seen fire is a
+        # belief, and `docs/CONCEPTUAL_DEBT.md` D13 is the record of what a gate that only checks
+        # its own existence gets you. It rewrites tracked files, so it is safe here for a reason
+        # it is not safe for on a laptop: the checkout is clean by construction (the harness
+        # refuses to start otherwise) and the tree is disposable afterwards.
+        run: python scripts/validation/check-refusals.py
+
       - name: The baseline reproduces, and refuses to be read as evidence about care
         run: |
           PYTHONPATH=scripts/validation python -m evidence baseline --markdown > /tmp/baseline.md
