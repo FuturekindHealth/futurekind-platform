@@ -4,6 +4,14 @@
 places this will actually be used: a radiology reading room at Hope Neurotrauma, and an
 ultrasound room at CARE Diagnostics with a tablet on a cart and a corridor outside.
 
+**Ownership, since the document set grew around it.** This file owns **the radiology screens**.
+The shared language every department's screens must obey is
+[`../design/DESIGN_SYSTEM.md`](../design/DESIGN_SYSTEM.md) — tokens, the keyboard, the eleven
+patterns — and the cross-application screen inventory and state wording is
+[`../design/UX_GUIDE.md`](../design/UX_GUIDE.md). Where this file states a rule that is really a
+family rule, the design system is its authority; where the design system states a pattern, this
+file is where radiology's version of it is specified. Neither file restates the other.
+
 ## 0. Six constraints that decide every layout below
 
 These come from the site, not from taste.
@@ -102,6 +110,30 @@ deterioration, not the loudest referral text (workflow B1).
 | Audit | `request_id`, prompt version, model, attempts, degraded — attached to the draft, not to a log the user cannot see |
 | Must not have | A single "Accept all and sign". A whole-pane replacement of the composer. Streaming text into the signed field before the clinician accepts it |
 
+**Who owns each section's words, and what that means on screen.** Decided per section rather
+than by a blanket rule, because the dangerous setting is a locked box holding a sentence the
+machine wrote. `report.py::editable_section_keys` is the one authority and the screen renders
+from it, so the rule cannot drift from the rendering; each locked box states whose words it
+holds and where to change them.
+
+| Section | Written by | Locked on screen | Why, and what would change it |
+| --- | --- | --- | --- |
+| Clinical indication | The referrer, copied from the submission | **Always** | It is the question the study answers. A model that paraphrases it has changed the clinical question — the Sprint 7 live defect. To change it, edit the box in the Study column and redraft |
+| Technique | The department when it supplies parameters; the model only to say they were not given | **Only when the department wrote it** | The department's own line must not be retyped into something untrue. When nobody supplied a protocol the sentence is the model's guess, and the radiologist at the console is the only person who knows whether the study had one — so it is editable, and the note says so |
+| Findings | The model, from the dictation | Never | The comparison against the dictation is the whole review. `dropped_observation` and `unsupported_measurement` are the machine's half; the images are the reviewer's |
+| Impression | The model | Never | The highest-value section and the highest-risk one. `unsupported_certainty` refuses a hedge that became a certainty, and a rewrite here is the case where a blocking finding falls to advisory — because the image, not the dictation, becomes the source |
+| Recommendations | The model | Never | Advice about what to do now is a clinical act, not a formatting one. Fully editable, fully checked |
+| Follow-up | The model | Never | Kept apart from recommendations because an interval buried in a paragraph of referrals is an interval nobody books. Whether this section should be AI-generated at all is the sharpest question the afternoon can answer: it is the one section whose entire content is a decision rather than an observation |
+
+Nothing auto-updates after a signature: the document is amended and re-exported,
+`metadata.review.amendments` names what a human took over, and `model_provenance` keeps saying the
+draft was machine-authored. A silent auto-update of a signed report would be a different report.
+
+Rows of the table above the Alpha now meets on its own screen: elapsed seconds counting with a
+Cancel (*States*, *Latency*), failure presentation in plain words with the manual path left live
+(*Failure presentation*), and audit attached to the draft rather than to a log (*Audit*).
+Per-block accept/discard and the per-block diff remain the ERP pane's work.
+
 Per-item mode (ultrasound, mammography, cardiac — workflow D2): the pane proposes **chips**
 keyed to organs, exactly as `UsgAiDraftPanel.tsx:122-141` already does. A chip is accepted or
 rejected individually; the report body is never written by the AI. This is the pattern that
@@ -139,19 +171,43 @@ report" is literally visible.
 | Audit | Copilot `metadata.review` (who, when, which sections rewritten) **and** the ERP's own signature columns. Both, keyed by the same `report_id` |
 | Identity requirement | **Blocking for Beta.** Today the USG studio's signer name is a clinic-level *setting* and one shared PIN authenticates the room (`auth.ts:10-27`, `schema.prisma:91-93`). A signature must come from a login, not a configuration row |
 
-**Built, in interim form (Sprint 9).** The Alpha copilot serves its own working screen at
-`GET /` — `apps/radiology_copilot/src/futurekind_radiology/static/index.html`. It is the layout
-above with three columns: the submission and its previous reports, the six editable sections
-with the signer's name, and the quality findings with the computed confidence and the
-provenance. It debounces into `POST /check` while the clinician types, and a blocking finding
-disables the sign button. No shortcut reaches sign, no bulk action exists, and the button is
-refused server-side as well as on screen.
+**Built, in interim form (Sprint 9, worked over in Genesis Night 2).** The Alpha copilot
+serves its own working screen at `GET /` —
+`apps/radiology_copilot/src/futurekind_radiology/static/index.html`. Three columns: the
+submission and its previous reports, the six report sections with the signer's name, and the
+quality findings with the computed confidence and the provenance. It debounces into
+`POST /check` while the clinician types, and a blocking finding disables the sign button and
+refuses it server-side as well.
+
+What the interaction work added, each item because it cost the person at the console
+attention they should be spending on the images: `Ctrl/⌘+Enter` drafts, then signs; `Alt+R`
+re-checks without waiting for the debounce; `Ctrl/⌘+Shift+C` copies the signed report for the
+RIS; `Ctrl+P` prints it; `Alt+N` starts the next study; `Alt+D` and `Alt+M` give the reading
+room its dark and wide modes. Tab order skips what cannot be typed in. Textareas grow to
+their content, because 700 characters of findings in a 92-pixel box is a scroll bar fought
+once per study. A quality finding that names a section is a button, and clicking it focuses
+that section and selects the quoted words instead of leaving the reviewer to hunt for them.
+Boxes are locked by **who owns the words** (`report.py::editable_section_keys`) and every
+locked box says so and says where to change it — the technique line is locked when the
+department supplied it and editable when the model wrote it, which is the case that used to
+be locked both ways. The inputs start empty, with placeholders instead of a worked example:
+prefilled indication and dictation is a form on which a real study can be reported under
+somebody else's words.
+
+One divergence from §6 above, stated rather than slipped: signing does have a shortcut. The
+rule's purpose is that a signature must never be an accidental keystroke or a bulk act, and
+that holds — `Ctrl/⌘+Enter` signs only a draft that exists, is not blocked, and has a name
+typed; with no name it moves focus to the name box and signs nothing. The literal "no
+shortcut reaches sign" is a preference for the ERP pane and is listed as an open question for
+the afternoon, not settled by this screen.
 
 What it is **not**, and must not be mistaken for: the ERP-integrated Approval Screen; an
 individually authenticated identity (the name is typed, which is exactly the F-A defect
-above); the per-section diff against the model's original text; a screen designed for the
-radiologist's own monitor at 4pm with eleven other tabs. It exists so the workflow can be used
-and measured today, and it is deliberately throwaway once the studio has the real pane.
+above); the per-section diff against the model's original text; a saved-draft or
+across-refresh recovery — the draft lives in that tab and nowhere else, so the page refuses
+to leave with unsaved words instead of writing the last patient onto a shared workstation.
+It exists so the workflow can be used and measured today, and it is deliberately throwaway
+once the studio has the real pane.
 
 ## 7. Audit Timeline
 

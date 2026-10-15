@@ -11,6 +11,8 @@
   - It holds the current draft in memory, in this tab, and nowhere else. Nothing is
     written to localStorage, sessionStorage, cookies or indexed DB: a shared
     department workstation must not keep the last patient on it for the next user.
+    The cost of that rule is stated where it is paid — a refresh loses the draft, so
+    the page refuses to leave with unsaved words rather than storing them somewhere.
   - It authenticates nobody. The clinician types their own name into the sign-off
     box, which is an attestation, not a login — binding that name to a real session
     is ADR-0004 and does not exist yet. Run this behind the hospital's own sign-in.
@@ -18,23 +20,77 @@
     that was submitted. That is stated on the panel rather than left implicit,
     because a reviewer who believes a green tick means "the report matches the
     study" is worse off than one who was told.
+  - It starts **empty**. The input boxes carry placeholders, not a worked example: a
+    screen prefilled with somebody's headache and somebody's protocol is a screen
+    where a real study can be reported under sample text, and the difference is only
+    visible to the person who notices too late.
+  - Which boxes may be typed in is decided by `report.py::editable_section_keys`,
+    not by this file. A section locked here while the model owns its words locks the
+    radiologist out of their own report.
 -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <title>Radiology Copilot</title>
     <style>
       :root {
         --ink: #16202b;
-        --muted: #5b6b7c;
+        --muted: #56667a;
         --line: #d3dbe3;
         --bg: #f4f6f8;
         --card: #ffffff;
+        --field: #ffffff;
+        --hover: #eef2f6;
         --block: #b4232c;
-        --advisory: #9a6a00;
+        --advisory: #8a5d00;
         --clear: #1d6b3f;
+        --focus: #12507e;
+      }
+      /* The reading room is dark and the report is the only light it needs. These
+         values are chosen for contrast against each other, not to match the light
+         theme: a radiologist at 2am is reading one thing, the prose. */
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #dde6ee;
+          --muted: #93a5b8;
+          --line: #2c3a48;
+          --bg: #0f151b;
+          --card: #161e26;
+          --field: #10171e;
+          --hover: #1e2933;
+          --block: #ef6a72;
+          --advisory: #d9a441;
+          --clear: #57b87e;
+          --focus: #6ab2e8;
+        }
+      }
+      :root[data-theme="dark"] {
+        --ink: #dde6ee;
+        --muted: #93a5b8;
+        --line: #2c3a48;
+        --bg: #0f151b;
+        --card: #161e26;
+        --field: #10171e;
+        --hover: #1e2933;
+        --block: #ef6a72;
+        --advisory: #d9a441;
+        --clear: #57b87e;
+        --focus: #6ab2e8;
+      }
+      :root[data-theme="light"] {
+        --ink: #16202b;
+        --muted: #56667a;
+        --line: #d3dbe3;
+        --bg: #f4f6f8;
+        --card: #ffffff;
+        --field: #ffffff;
+        --hover: #eef2f6;
+        --block: #b4232c;
+        --advisory: #8a5d00;
+        --clear: #1d6b3f;
+        --focus: #12507e;
       }
       * {
         box-sizing: border-box;
@@ -50,14 +106,14 @@
       header {
         background: var(--card);
         border-bottom: 1px solid var(--line);
-        padding: 12px 20px;
+        padding: 10px 18px;
         display: flex;
         align-items: baseline;
         gap: 12px;
         flex-wrap: wrap;
       }
       header h1 {
-        font-size: 18px;
+        font-size: 17px;
         margin: 0;
         font-weight: 650;
       }
@@ -71,12 +127,29 @@
         font-weight: 650;
         color: var(--block);
       }
+      header .tools {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
       main {
         display: grid;
-        grid-template-columns: minmax(300px, 380px) minmax(0, 1fr) minmax(240px, 320px);
-        gap: 16px;
-        padding: 16px;
+        grid-template-columns: minmax(280px, 360px) minmax(0, 1fr) minmax(240px, 330px);
+        gap: 14px;
+        padding: 14px 16px;
         align-items: start;
+      }
+      /* Reading mode gives the prose the column it needs and leaves the other two
+         present but quiet — the dictation stays readable, it just stops competing. */
+      body.reading main {
+        grid-template-columns: minmax(220px, 250px) minmax(0, 1fr) minmax(220px, 280px);
+      }
+      body.reading .section-block textarea {
+        font-size: 18px;
+        line-height: 1.6;
+      }
+      body.reading section#inputs {
+        opacity: 0.62;
       }
       @media (max-width: 1100px) {
         main {
@@ -111,38 +184,49 @@
         padding: 7px 9px;
         border: 1px solid var(--line);
         border-radius: 4px;
-        background: #fff;
+        background: var(--field);
         color: var(--ink);
       }
       textarea {
         resize: vertical;
+        overflow: hidden;
       }
-      #findings {
-        min-height: 190px;
-      }
-      .section-block textarea {
-        min-height: 92px;
+      input::placeholder,
+      textarea::placeholder {
+        color: var(--muted);
+        opacity: 0.85;
       }
       button {
         width: auto;
         cursor: pointer;
-        background: #eef2f6;
+        background: var(--hover);
       }
       button.primary {
-        background: #12507e;
-        border-color: #12507e;
+        background: var(--focus);
+        border-color: var(--focus);
         color: #fff;
         font-weight: 600;
+      }
+      :root[data-theme="dark"] button.primary {
+        color: #06121c;
       }
       button.sign {
-        background: #1d6b3f;
-        border-color: #1d6b3f;
+        background: var(--clear);
+        border-color: var(--clear);
         color: #fff;
         font-weight: 600;
       }
+      :root[data-theme="dark"] button.sign {
+        color: #04120a;
+      }
       button:disabled {
-        opacity: 0.55;
+        opacity: 0.5;
         cursor: not-allowed;
+      }
+      /* A keyboard user must be able to see where they are, in both themes. */
+      :focus-visible {
+        outline: 3px solid var(--focus);
+        outline-offset: 1px;
       }
       .row {
         display: flex;
@@ -160,19 +244,33 @@
       .prior label {
         margin-top: 0;
       }
+      .prior .row {
+        margin-top: 6px;
+      }
       .quality {
         font-size: 14px;
       }
       .finding {
+        display: block;
+        width: 100%;
+        text-align: left;
+        border: 0;
         border-left: 3px solid var(--muted);
+        border-radius: 0;
+        background: transparent;
         padding: 6px 0 6px 9px;
-        margin: 0 0 8px;
+        margin: 0 0 6px;
+        font-size: 14px;
+        cursor: pointer;
       }
       .finding.block {
         border-left-color: var(--block);
       }
       .finding.advisory {
         border-left-color: var(--advisory);
+      }
+      .finding.plain {
+        cursor: default;
       }
       .finding .tag {
         font-size: 11px;
@@ -198,9 +296,13 @@
       }
       .basis,
       .scope,
-      .note {
+      .note,
+      .locknote {
         font-size: 12px;
         color: var(--muted);
+      }
+      .locknote {
+        margin: 3px 0 0;
       }
       .reasons {
         margin: 6px 0 0;
@@ -219,6 +321,11 @@
       }
       dd {
         margin: 0 0 3px 122px;
+      }
+      details summary {
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--muted);
       }
       #error {
         display: none;
@@ -240,10 +347,58 @@
       .section-block {
         margin-bottom: 12px;
       }
-      #indicator {
+      #status {
         font-size: 12px;
         color: var(--muted);
         margin-left: 6px;
+      }
+      .keys {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .keys kbd {
+        font: inherit;
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 0 4px;
+        background: var(--hover);
+        color: var(--ink);
+      }
+
+      /* Print is how a radiology report travels, and the screen already holds the
+         words the reviewer read — so the printout is the same DOM, not a second
+         rendering that could disagree with it. The controls go; the banner, the six
+         sections and the checks stay. */
+      @media print {
+        body {
+          background: #fff;
+          color: #000;
+        }
+        header .tools,
+        header .state,
+        section#inputs,
+        #status,
+        .row,
+        .keys {
+          display: none !important;
+        }
+        main {
+          display: block;
+          padding: 0;
+        }
+        section {
+          border: 0;
+          padding: 0;
+        }
+        textarea {
+          border: 0;
+          background: transparent;
+          color: #000;
+          resize: none;
+        }
+        .finding {
+          border-left-color: #000;
+        }
       }
     </style>
   </head>
@@ -252,25 +407,39 @@
       <h1>Radiology Copilot</h1>
       <span class="state" id="service">MRI brain · skill radiology-report</span>
       <span class="banner" id="banner">DRAFT — NOT SIGNED. Not for clinical use.</span>
+      <span class="tools">
+        <button type="button" id="theme" title="Alt+D">Dark</button>
+        <button type="button" id="reading" title="Alt+M">Reading</button>
+        <button type="button" id="print" title="Ctrl+P" disabled>Print</button>
+        <button type="button" id="reset" title="Alt+N">New study</button>
+      </span>
+      <details class="keys">
+        <summary>Keys</summary>
+        <p>
+          <kbd>Ctrl/⌘ + Enter</kbd> draft, then sign · <kbd>Alt + R</kbd> re-check ·
+          <kbd>Ctrl/⌘ + Shift + C</kbd> copy the signed report · <kbd>Ctrl/⌘ + P</kbd> print or
+          save as PDF · <kbd>Alt + N</kbd> new study · <kbd>Alt + D</kbd> dark ·
+          <kbd>Alt + M</kbd> reading · <kbd>Esc</kbd> dismiss a failure
+        </p>
+      </details>
     </header>
 
     <main>
       <!-- ------------------------------------------------ submitted inputs -->
-      <section>
+      <section id="inputs">
         <h2>Study</h2>
         <label for="study">Exam</label>
         <input id="study" value="MRI BRAIN WITH AND WITHOUT CONTRAST" />
         <label for="modality">Modality</label>
         <input id="modality" value="MRI" />
         <label for="indication">Clinical indication (the referrer's words)</label>
-        <textarea id="indication" rows="3">45-year-old, chronic headache, no neurological deficit</textarea>
+        <textarea id="indication" rows="3" placeholder="Why the study was done, as the referrer wrote it."></textarea>
         <label for="technique">Technique — leave blank if not stated</label>
-        <textarea id="technique" rows="2">MRI brain with and without intravenous contrast; axial T2, FLAIR, DWI and post-contrast T1 sequences.</textarea>
+        <textarea id="technique" rows="2" placeholder="Sequences and contrast, if the department gave them. Blank means the draft will say it was not provided."></textarea>
 
         <h2 style="margin-top: 18px">Dictation</h2>
         <label for="findings">What you saw</label>
-        <textarea id="findings">Normal grey-white matter. No mass, no abnormal enhancement. Normal ventricular size and morphology. No white matter lesions. Pituitary normal. No sinus disease. Hippocampi, brainstem and cerebellum normal. No midline shift.</textarea>
-        <p class="note">Every number in the report must come from here or from a previous report below.</p>
+        <textarea id="findings" rows="6" placeholder="Everything you saw, including what was normal. Every number in the report must come from here or from a previous report below."></textarea>
 
         <h2 style="margin-top: 18px">Previous reports (optional)</h2>
         <div id="priors"></div>
@@ -280,10 +449,19 @@
 
         <div class="row">
           <button type="button" class="primary" id="draft">Draft the report</button>
-          <button type="button" id="redraft">Redraft with a note</button>
-          <input id="focus" placeholder="e.g. comment on the posterior fossa" />
+          <button type="button" id="cancel" hidden>Cancel</button>
         </div>
-        <p id="error"></p>
+        <div class="row">
+          <label for="focus" style="margin: 0; width: auto">Note for a redraft</label>
+          <input id="focus" placeholder="e.g. comment on the posterior fossa" />
+          <button type="button" id="redraft">Redraft</button>
+        </div>
+        <div class="row">
+          <label for="return-comment" style="margin: 0; width: auto">What is wrong</label>
+          <input id="return-comment" placeholder="Sent to the next draft with your name on it" />
+          <button type="button" id="return" disabled>Return for correction</button>
+        </div>
+        <p id="error" role="alert"></p>
       </section>
 
       <!-- ------------------------------------------------------------ draft -->
@@ -293,35 +471,43 @@
           <p class="note">Nothing drafted yet.</p>
         </div>
         <div class="row">
-          <span class="section-name" id="indicator"></span>
+          <span class="section-name" id="status" role="status" aria-live="polite"></span>
         </div>
         <div class="row">
           <label for="clinician" style="margin: 0; width: auto">Signing radiologist</label>
           <input id="clinician" placeholder="Name as it appears on the report" style="width: 280px" />
         </div>
         <div class="row">
-          <button type="button" class="sign" id="sign" disabled>Approve and sign</button>
-          <button type="button" id="return" disabled>Return for correction</button>
-          <select id="format" style="width: 120px">
+          <button type="button" class="sign" id="sign" disabled aria-keyshortcuts="Control+Enter">
+            Approve and sign
+          </button>
+          <select id="format" style="width: 120px" aria-label="Export format">
             <option value="text">text</option>
             <option value="markdown">markdown</option>
             <option value="json">json</option>
           </select>
           <button type="button" id="export" disabled>Export</button>
+          <button type="button" id="copy" disabled>Copy for the RIS</button>
         </div>
       </section>
 
       <!-- ------------------------------------------------------ the checks -->
       <section>
         <h2>Quality</h2>
-        <p class="quality" id="quality">Checks run after a draft.</p>
+        <div id="quality" class="quality" role="status" aria-live="polite">
+          Checks run after a draft.
+        </div>
         <p class="scope" id="scope"></p>
         <h2 style="margin-top: 18px">Confidence</h2>
         <p class="quality" id="confidence">—</p>
         <ul class="reasons" id="reasons"></ul>
         <p class="basis" id="basis"></p>
         <h2 style="margin-top: 18px">Provenance</h2>
-        <dl id="provenance"><dd>—</dd></dl>
+        <p class="note" id="prov-summary">—</p>
+        <details>
+          <summary>How this draft was made</summary>
+          <dl id="provenance"><dd>—</dd></dl>
+        </details>
       </section>
     </main>
 
@@ -332,41 +518,169 @@
       // about what a report contains — the same rule `report.py::SECTION_KEYS` holds
       // in Python, and this page is a second reader of that contract, not a new one.
       const SECTIONS = [
-        ["clinical_indication", "Clinical indication", false],
-        ["technique", "Technique", false],
-        ["findings", "Findings", true],
-        ["impression", "Impression", true],
-        ["recommendations", "Recommendations", true],
-        ["follow_up", "Follow-up", true],
+        ["clinical_indication", "Clinical indication"],
+        ["technique", "Technique"],
+        ["findings", "Findings"],
+        ["impression", "Impression"],
+        ["recommendations", "Recommendations"],
+        ["follow_up", "Follow-up"],
       ];
+
+      // Mirrors `report.py::editable_section_keys`. A section is locked because somebody
+      // else owns its words, and the reason is shown rather than left to be guessed.
+      const PROSE_SECTIONS = ["findings", "impression", "recommendations", "follow_up"];
+      const LOCK_NOTES = {
+        clinical_indication: "The referrer's own words, carried through untouched. Edit it above and redraft.",
+        technique_department:
+          "The department's technique line, copied through untouched. Edit it above if it is wrong.",
+        technique_model:
+          "Nobody supplied the protocol, so this sentence is the model's. Correct it if the study had one.",
+      };
+      const CHECK_DEBOUNCE_MS = 400;
+      const SLOW_AFTER_MS = 8000;
+
       let report = null;
       let checking = 0;
+      let dirty = false;
+      let inflight = null;
+      let clock = null;
 
       const value = (id) => document.getElementById(id).value.trim();
       const show = (id, text) => {
         document.getElementById(id).textContent = text;
       };
+      const enable = (id, on) => {
+        document.getElementById(id).disabled = !on;
+      };
+
+      // A textarea that grows with the words in it. A 92-pixel box around two hundred
+      // words of findings is a scroll bar the radiologist fights for the whole study.
+      function grow(box) {
+        if (!box.isConnected) return; // scrollHeight is zero before it is in the document
+        box.style.height = "auto";
+        const needed = Math.max(box.scrollHeight, 60);
+        box.style.height = `${Math.min(needed + 2, 1600)}px`;
+      }
+
+      function editableSectionsKeys() {
+        if (!report) return [];
+        const keys = [...PROSE_SECTIONS];
+        if (report.metadata.technique_from === "model") keys.unshift("technique");
+        return keys;
+      }
 
       function failure(body) {
         const error = body && body.error ? body.error : null;
-        if (!error) return JSON.stringify(body, null, 2);
+        if (!error) {
+          // This application always answers with the platform envelope, so a body without one
+          // came from something else — a proxy, a maintenance page. Shown, because a blank
+          // failure is worse, and capped, because whatever it is should not fill a printout.
+          const raw = JSON.stringify(body, null, 2) || "the service returned nothing readable";
+          return raw.length > 600 ? `${raw.slice(0, 600)}…` : raw;
+        }
         const blocked = (error.details && error.details.blocking) || [];
         const names = blocked.map((b) => `${b.check}${b.section ? ` (${b.section})` : ""}`);
+        const guidance = GUIDE[error.code] || "";
+        // A 422 from this application lists the fields it rejected and never the values,
+        // because the values are dictated text. The message says "the field names are listed
+        // above", so they have to actually appear.
+        const problems = (error.details && error.details.problems) || [];
+        const fields = problems.map(
+          (p) => `${(p.loc || []).slice(1).join(".") || "body"} — ${p.msg || p.type || "rejected"}`
+        );
         return (
           error.message +
+          (guidance ? `\n\n${guidance}` : "") +
+          (fields.length ? "\n\nWhat the form is missing:\n- " + fields.join("\n- ") : "") +
           (names.length ? "\n\nChecks that refused it:\n- " + names.join("\n- ") : "") +
-          (error.request_id ? `\n\nGateway request id: ${error.request_id}` : "")
+          (error.request_id ? `\n\nGateway request id: ${error.request_id}` : "") +
+          (error.retryable ? "\n\nThis one is worth trying again." : "")
         );
       }
 
-      async function post(path, payload) {
-        const response = await fetch(path, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const body = await response.json();
-        if (!response.ok) throw new Error(failure(body));
+      // Each way the AI can fail needs a different next action, and the difference is the
+      // clinician's minute. The codes are the platform envelope's (`errors.py`); nothing
+      // here invents a new one, and no path prints dictated or generated text.
+      const GUIDE = {
+        model_output_unusable:
+          "The model answered, but not as a report — prose, or a missing section, or a blank one. " +
+          "Nothing was filed. Redraft, or write the section yourself: the box is yours either way.",
+        report_truncated:
+          "The answer ran out of tokens before the report was finished, so there is no draft. " +
+          "Shorten the dictation or split the study, then ask again.",
+        gateway_request_failed:
+          "The Gateway did not answer. The dictation above is still yours and nothing was lost — " +
+          "check the service, then try again.",
+        policy_not_enforced:
+          "This deployment is not running radiology-report under the policy the report was written " +
+          "against, so no draft will come. Nothing you type here fixes it: tell the operator.",
+        skill_mismatch:
+          "The answer came back under a different skill, so it is not a radiology draft and was refused.",
+        degraded_answer:
+          "A lesser model answered a high-risk skill. The policy forbids that, so the answer was " +
+          "refused rather than shown.",
+        review_invalid:
+          "The report still says something the submitted text does not support. Correct the wording " +
+          "in the section named, or send it back for correction.",
+        report_unsigned:
+          "Export needs a signature first — the department's workflow puts review before handoff.",
+        invalid_request:
+          "The form did not fit what the endpoint expects. The field names are listed above.",
+        network:
+          "This browser could not reach the copilot at all, so nothing was sent and nothing " +
+          "was lost. Check the service is running, then press Ctrl/⌘ + Enter to ask again.",
+      };
+
+      function showError(text) {
+        const box = document.getElementById("error");
+        box.textContent = text;
+        box.style.display = text ? "block" : "none";
+      }
+
+      // A proxy error page, a crashed worker and an HTML maintenance screen all answer
+      // without JSON. The raw body is never shown: it is the one place a traceback could
+      // carry the text that was submitted, and a screenshot of this box travels.
+      function notJson(status) {
+        return Object.assign(
+          new Error(
+            `The service answered ${status} without the JSON this screen expects, so there is ` +
+              "no draft and nothing was filed. Try again; if it repeats, the operator needs " +
+              "the time of this request." +
+              (status < 400 ? " (It claimed to have succeeded.)" : "")
+          ),
+          {code: "invalid_response"}
+        );
+      }
+
+      async function post(path, payload, signal) {
+        let response;
+        try {
+          response = await fetch(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal,
+          });
+        } catch (error) {
+          if (error.name === "AbortError") throw error;
+          const wrapped = new Error(GUIDE.network);
+          wrapped.code = "network";
+          throw wrapped;
+        }
+        const text = await response.text();
+        let body = null;
+        try {
+          body = text ? JSON.parse(text) : null;
+        } catch (problem) {
+          body = undefined; // an answer that is not JSON, distinguished from an empty one
+        }
+        if (body === undefined) throw notJson(response.status);
+        if (!response.ok) {
+          const wrapped = new Error(failure(body));
+          wrapped.code = body && body.error ? body.error.code : "unknown";
+          throw wrapped;
+        }
+        if (!body) throw notJson(response.status);
         return body;
       }
 
@@ -398,44 +712,90 @@
           .filter((prior) => prior.reported_on && prior.modality && prior.study && prior.report);
       }
 
+      // Built with nodes, not a markup string: these boxes are filled with what a
+      // clinician dictates, and a template literal would put that text into the DOM as
+      // HTML for the browser to interpret.
       function addPrior() {
         const row = document.createElement("div");
         row.className = "prior";
-        row.innerHTML = `
-          <label>Reported</label>
-          <input data-field="reported_on" placeholder="2024-06-11, or 4 months ago" />
-          <label>Modality and exam</label>
-          <input data-field="modality" placeholder="MRI" size="6" />
-          <input data-field="study" placeholder="MRI BRAIN WITH CONTRAST" />
-          <label>That report</label>
-          <textarea data-field="report" rows="3" placeholder="Its findings and impression, as signed"></textarea>`;
+        const fields = [
+          ["reported_on", "Reported", "2024-06-11, or 4 months ago", "input"],
+          ["modality", "Modality", "MRI", "input"],
+          ["study", "Exam", "MRI BRAIN WITH CONTRAST", "input"],
+          ["report", "That report", "Its findings and impression, as signed", "textarea"],
+        ];
+        for (const [name, label, hint, kind] of fields) {
+          const caption = document.createElement("label");
+          caption.textContent = label;
+          row.appendChild(caption);
+          const box = document.createElement(kind);
+          box.dataset.field = name;
+          box.placeholder = hint;
+          if (kind === "textarea") box.rows = 3;
+          if (name === "modality") box.style.width = "30%";
+          row.appendChild(box);
+        }
+        const actions = document.createElement("div");
+        actions.className = "row";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Remove this report";
+        remove.addEventListener("click", () => row.remove());
+        actions.appendChild(remove);
+        row.appendChild(actions);
         document.getElementById("priors").appendChild(row);
+        row.querySelector("input").focus();
       }
 
       function renderSections() {
         const host = document.getElementById("sections");
-        host.innerHTML = "";
-        for (const [key, label, editable] of SECTIONS) {
+        host.textContent = "";
+        const editable = new Set(editableSectionsKeys());
+        for (const [key, label] of SECTIONS) {
           const block = document.createElement("div");
           block.className = "section-block";
-          block.innerHTML = `<label for="sec-${key}">${label}</label>`;
+
+          const caption = document.createElement("label");
+          caption.setAttribute("for", `sec-${key}`);
+          caption.textContent = label;
+          block.appendChild(caption);
+
           const box = document.createElement("textarea");
           box.id = `sec-${key}`;
           box.value = report[key] || "";
-          box.readOnly = !editable;
-          // An edited section re-runs the checks: the verdict must describe the words
-          // on the screen, not the ones the model first returned.
-          box.addEventListener("input", queueCheck);
+          box.rows = 2;
+          box.dataset.original = report[key] || "";
+          box.readOnly = !editable.has(key);
+          if (box.readOnly) box.tabIndex = -1;
+          box.addEventListener("input", () => {
+            grow(box);
+            dirty = true;
+            queueCheck();
+          });
           block.appendChild(box);
+
+          const note = document.createElement("p");
+          note.className = "locknote";
+          if (key === "clinical_indication") note.textContent = LOCK_NOTES.clinical_indication;
+          else if (key === "technique")
+            note.textContent =
+              report.metadata.technique_from === "model"
+                ? LOCK_NOTES.technique_model
+                : LOCK_NOTES.technique_department;
+          else note.textContent = "";
+          if (note.textContent) block.appendChild(note);
+
           host.appendChild(block);
         }
+        // Measured once the boxes are in the document: height of a detached element is
+        // zero, which silently turned every section into a 16-pixel slit on first render.
+        for (const box of host.querySelectorAll("textarea")) grow(box);
       }
 
       function editedSections() {
         if (!report) return {};
         const edits = {};
-        for (const [key, , editable] of SECTIONS) {
-          if (!editable) continue;
+        for (const key of editableSectionsKeys()) {
           const box = document.getElementById(`sec-${key}`);
           if (box && box.value.trim() !== (report[key] || "").trim()) {
             edits[key] = box.value.trim();
@@ -444,26 +804,56 @@
         return edits;
       }
 
+      function clear(node) {
+        while (node.firstChild) node.removeChild(node.firstChild);
+        return node;
+      }
+
+      function findingRow(finding) {
+        // A finding that names a section and quotes words is a link into the text: the
+        // reviewer should land on the sentence, not go hunting for it while a patient waits.
+        const target = finding.section ? document.getElementById(`sec-${finding.section}`) : null;
+        const row = document.createElement(finding.section ? "button" : "div");
+        row.className = `finding ${finding.severity}${finding.section ? "" : " plain"}`;
+        if (finding.section) row.type = "button";
+        if (target) {
+          row.title = "Click to see the words in the report";
+          row.addEventListener("click", () => {
+            const needle = (finding.evidence || "").trim().toLowerCase();
+            const at = needle ? target.value.toLowerCase().indexOf(needle) : -1;
+            target.focus();
+            if (at >= 0) target.setSelectionRange(at, at + (finding.evidence || "").trim().length);
+            target.scrollIntoView({ block: "center" });
+          });
+        }
+        const tag = document.createElement("div");
+        tag.className = "tag";
+        tag.textContent = `${finding.severity}${finding.section ? ` · ${finding.section}` : ""}` +
+          ` · ${finding.check}`;
+        row.appendChild(tag);
+        const message = document.createElement("div");
+        message.textContent = finding.message;
+        row.appendChild(message);
+        if (finding.evidence) {
+          const quoted = document.createElement("div");
+          quoted.className = "quoted";
+          quoted.textContent = `quoted: ${finding.evidence}`;
+          row.appendChild(quoted);
+        }
+        return row;
+      }
+
       function renderChecks() {
         const quality = report.quality;
-        const host = document.getElementById("quality");
+        const host = clear(document.getElementById("quality"));
         host.className = `quality status-${quality.status}`;
-        const headline =
+        const headline = document.createElement("div");
+        headline.textContent =
           quality.status === "clear"
             ? `Quality: no issues raised (${quality.checks_run.length} checks)`
             : `Quality: ${quality.findings.length} finding(s) — ${quality.status}`;
-        host.innerHTML =
-          `<div>${escapeHtml(headline)}</div>` +
-          quality.findings
-            .map(
-              (f) =>
-                `<div class="finding ${escapeHtml(f.severity)}">
-                   <div class="tag">${escapeHtml(f.severity)}${f.section ? ` · ${escapeHtml(f.section)}` : ""} · ${escapeHtml(f.check)}</div>
-                   <div>${escapeHtml(f.message)}</div>
-                   ${f.evidence ? `<div class="quoted">quoted: ${escapeHtml(f.evidence)}</div>` : ""}
-                 </div>`
-            )
-            .join("");
+        host.appendChild(headline);
+        for (const finding of quality.findings) host.appendChild(findingRow(finding));
         show("scope", quality.scope);
 
         const confidence = report.confidence;
@@ -479,47 +869,69 @@
         level.className = `quality status-${tone}`;
         level.textContent = `${confidence.level} — ${confidence.label}`;
         show("basis", confidence.basis);
-        document.getElementById("reasons").innerHTML = confidence.reasons
-          .map((reason) => `<li>${escapeHtml(reason)}</li>`)
-          .join("");
+        const reasons = clear(document.getElementById("reasons"));
+        for (const reason of confidence.reasons) {
+          const item = document.createElement("li");
+          item.textContent = reason;
+          reasons.appendChild(item);
+        }
 
-        document.getElementById("provenance").innerHTML = [
-          ["Model", report.model_provenance.model],
-          ["Provider", report.model_provenance.provider],
-          ["Selected by", report.model_provenance.selected_by],
-          ["Attempts", String(report.model_provenance.attempts)],
-          ["Degraded", report.model_provenance.degraded ? "YES" : "no"],
-          ["Latency", `${report.model_provenance.latency_ms} ms`],
-          ["Request id", report.model_provenance.request_id],
+        const provenance = report.model_provenance;
+        // The one line a reviewer actually reads, with the full audit block behind it.
+        // Model, latency, prompt version and profile are on it because the printout shows
+        // this line even if the block below is never opened.
+        show(
+          "prov-summary",
+          `${provenance.model} · ${(provenance.latency_ms / 1000).toFixed(1)} s · ` +
+            `${provenance.attempts} attempt(s) · ${report.metadata.prompt_version} · ` +
+            `profile ${report.metadata.profile || "none"}` +
+            (provenance.degraded ? " · DEGRADED" : "")
+        );
+        const host2 = clear(document.getElementById("provenance"));
+        for (const [name, detail] of [
+          ["Model", provenance.model],
+          ["Provider", provenance.provider],
+          ["Selected by", provenance.selected_by],
+          ["Attempts", String(provenance.attempts)],
+          ["Degraded", provenance.degraded ? "YES" : "no"],
+          ["Latency", `${provenance.latency_ms} ms`],
+          ["Finish reason", provenance.finish_reason || "not reported"],
+          ["Request id", provenance.request_id],
           ["Prompt", report.metadata.prompt_version],
           ["Profile", report.metadata.profile || "none"],
           ["Compared with", report.metadata.compared_with.join("; ") || "no priors"],
           ["Drafted", report.metadata.drafted_at],
-        ]
-          .map(([name, detail]) => `<dt>${name}</dt><dd>${escapeHtml(detail)}</dd>`)
-          .join("");
+        ]) {
+          const term = document.createElement("dt");
+          term.textContent = name;
+          const described = document.createElement("dd");
+          described.textContent = detail;
+          host2.append(term, described);
+        }
 
+        const signed = report.metadata.review.state === "signed";
         const blocked = quality.status === "blocking";
-        document.getElementById("sign").disabled = blocked;
-        document.getElementById("banner").textContent = report.metadata.review.state === "signed"
+        enable("sign", !blocked);
+        enable("copy", signed);
+        enable("print", Boolean(report));
+        document.getElementById("banner").textContent = signed
           ? `SIGNED — ${report.metadata.review.clinician}`
           : blocked
             ? "QUALITY BLOCK — correct the flagged statements before signing"
             : "DRAFT — NOT SIGNED. Not for clinical use.";
-        document.getElementById("banner").style.color =
-          report.metadata.review.state === "signed" ? "var(--clear)" : "var(--block)";
+        document.getElementById("banner").style.color = signed ? "var(--clear)" : "var(--block)";
       }
 
-      function escapeHtml(text) {
-        return String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+      function status(text) {
+        show("status", text);
       }
 
       function queueCheck() {
-        show("indicator", "checking…");
+        status("checking…");
         if (checking) clearTimeout(checking);
         // Debounced: a keystroke must not become a request per character, and the
         // checks are cheap enough that waiting 400 ms is invisible to the reviewer.
-        checking = setTimeout(runCheck, 400);
+        checking = setTimeout(runCheck, CHECK_DEBOUNCE_MS);
       }
 
       async function runCheck() {
@@ -529,11 +941,31 @@
         try {
           report = await post("/check", { report: merged, submission: currentSubmission() });
           renderChecks();
-          show("indicator", Object.keys(edits).length ? `edited: ${Object.keys(edits).join(", ")}` : "");
+          showError("");
+          const names = Object.keys(edits);
+          status(names.length ? `edited: ${names.join(", ")} · checks re-run` : "checks re-run");
         } catch (error) {
-          show("error", error.message);
-          document.getElementById("error").style.display = "block";
+          showError(error.message);
+          status("the checks did not come back");
         }
+      }
+
+      function startClock(label) {
+        const started = Date.now();
+        status(`${label}… 0 s`);
+        clock = setInterval(() => {
+          const seconds = Math.round((Date.now() - started) / 1000);
+          status(
+            seconds >= SLOW_AFTER_MS / 1000
+              ? `${label}… ${seconds}s — a draft can legitimately take a couple of minutes`
+              : `${label}… ${seconds}s`
+          );
+        }, 1000);
+      }
+
+      function stopClock() {
+        if (clock) clearInterval(clock);
+        clock = null;
       }
 
       function download(name, content) {
@@ -548,32 +980,165 @@
       }
 
       async function draftWith(extra) {
-        document.getElementById("error").style.display = "none";
+        showError("");
+        document.getElementById("cancel").hidden = false;
+        inflight = new AbortController();
+        startClock(extra ? "Redrafting" : "Drafting");
         try {
-          report = await post("/draft", {
-            submission: currentSubmission(),
-            ...(extra ? { extra_instructions: extra } : {}),
-          });
+          report = await post(
+            "/draft",
+            {
+              submission: currentSubmission(),
+              ...(extra ? { extra_instructions: extra } : {}),
+            },
+            inflight.signal
+          );
           renderSections();
           renderChecks();
+          dirty = false;
           document.getElementById("return").disabled = false;
-          document.getElementById("export").disabled = false;
-          show("indicator", "");
+          enable("export", true);
+          status("");
         } catch (error) {
-          report = null;
-          document.getElementById("error").textContent = error.message;
-          document.getElementById("error").style.display = "block";
+          if (error.name === "AbortError") {
+            status("cancelled — nothing was filed");
+            showError("");
+          } else {
+            report = null;
+            showError(error.message);
+            status("no draft came back");
+          }
+        } finally {
+          stopClock();
+          inflight = null;
+          document.getElementById("cancel").hidden = true;
         }
       }
 
+      async function decide(decision, note) {
+        const clinician = value("clinician");
+        if (decision === "signed" && !clinician) {
+          showError("Type your name before signing.");
+          document.getElementById("clinician").focus();
+          return;
+        }
+        if (decision === "returned_for_correction" && !note) {
+          showError("Say what is wrong, or the next draft repeats the same mistake.");
+          document.getElementById("return-comment").focus();
+          return;
+        }
+        showError("");
+        startClock(decision === "signed" ? "Signing" : "Returning");
+        try {
+          report = await post("/review", {
+            report: { ...report, ...editedSections() },
+            decision,
+            clinician: clinician || "reporting radiologist",
+            ...(note ? { comment: note } : {}),
+            submission: currentSubmission(),
+          });
+          dirty = false;
+          renderSections();
+          renderChecks();
+          status(decision === "signed" ? `signed by ${clinician}` : "returned for correction");
+        } catch (error) {
+          // A refused signature must not look like a lost one: the words stay on the
+          // screen, and the finding that refused them is named.
+          showError(error.message);
+          status("not signed");
+        } finally {
+          stopClock();
+        }
+      }
+
+      async function handoff(mode) {
+        if (!report) return;
+        const signed = report.metadata.review.state === "signed";
+        if (!signed) {
+          showError(
+            "Nothing leaves this screen unsigned — that is the workflow, not a lock you can " +
+              "click past. Sign it, then copy or export."
+          );
+          document.getElementById("sign").focus();
+          return;
+        }
+        try {
+          const result = await post("/export", {
+            report: { ...report, ...editedSections() },
+            // The clipboard is for pasting into the RIS, so it always gets the prose;
+            // the format box belongs to the file, where a system may read json.
+            format: mode === "clipboard" ? "text" : value("format"),
+          });
+          if (mode === "clipboard") {
+            // No success claim without the write. A radiologist who is told "copied" when
+            // the browser refused the paste board is going to paste nothing into the RIS.
+            if (await copyToClipboard(result.content)) status("copied to the clipboard");
+          } else {
+            download(result.filename, result.content);
+            status(`exported ${result.filename}`);
+          }
+        } catch (error) {
+          showError(error.message);
+        }
+      }
+
+      async function copyToClipboard(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return true;
+        } catch (error) {
+          showError(
+            "This browser refused the clipboard write, so nothing was copied. Use Export " +
+              "instead — the file holds the same text."
+          );
+          return false;
+        }
+      }
+
+      function resetScreen() {
+        if (dirty) {
+          // Nothing is stored anywhere, so an accidental click here is the one way to
+          // actually lose work. Ask once, and only when there is something to lose.
+          if (!confirm("Clear this study? The draft and anything you typed will be lost.")) return;
+        }
+        report = null;
+        dirty = false;
+        for (const id of ["indication", "technique", "findings", "focus", "return-comment"]) {
+          document.getElementById(id).value = "";
+        }
+        document.getElementById("priors").textContent = "";
+        document.getElementById("sections").innerHTML = '<p class="note">Nothing drafted yet.</p>';
+        document.getElementById("quality").className = "quality";
+        show("quality", "Checks run after a draft.");
+        show("scope", "");
+        show("confidence", "—");
+        document.getElementById("reasons").textContent = "";
+        show("basis", "");
+        show("prov-summary", "—");
+        document.getElementById("provenance").innerHTML = "<dd>—</dd>";
+        show("banner", "DRAFT — NOT SIGNED. Not for clinical use.");
+        document.getElementById("banner").style.color = "var(--block)";
+        showError("");
+        status("new study");
+        enable("sign", false);
+        enable("export", false);
+        enable("copy", false);
+        enable("print", false);
+        document.getElementById("return").disabled = true;
+        // The radiologist's own name is not patient data and is retyped every study without it.
+        document.getElementById("clinician").focus();
+      }
+
       document.getElementById("draft").addEventListener("click", () => draftWith(null));
+      document.getElementById("cancel").addEventListener("click", () => {
+        if (inflight) inflight.abort();
+      });
 
       document.getElementById("redraft").addEventListener("click", () => {
         const note = value("focus");
         if (!note) {
-          document.getElementById("error").textContent =
-            "Write what to change, then redraft.";
-          document.getElementById("error").style.display = "block";
+          showError("Write what to change, then redraft.");
+          document.getElementById("focus").focus();
           return;
         }
         // The note joins the system turn server-side. It is the only steering this page
@@ -582,77 +1147,127 @@
         draftWith({ reviewer_note: note });
       });
 
-      document.getElementById("sign").addEventListener("click", async () => {
-        const clinician = value("clinician");
-        if (!clinician) {
-          document.getElementById("error").textContent = "Type your name before signing.";
-          document.getElementById("error").style.display = "block";
-          return;
-        }
-        try {
-          report = await post("/review", {
-            report: { ...report, ...editedSections() },
-            decision: "signed",
-            clinician,
-            submission: currentSubmission(),
-          });
-          renderSections();
-          renderChecks();
-        } catch (error) {
-          document.getElementById("error").textContent = error.message;
-          document.getElementById("error").style.display = "block";
-        }
-      });
-
-      document.getElementById("return").addEventListener("click", async () => {
-        const comment = value("focus");
-        if (!comment) {
-          document.getElementById("error").textContent =
-            "Say what is wrong, or the next draft repeats the same mistake.";
-          document.getElementById("error").style.display = "block";
-          return;
-        }
-        try {
-          report = await post("/review", {
-            report: { ...report, ...editedSections() },
-            decision: "returned_for_correction",
-            clinician: value("clinician") || "reporting radiologist",
-            comment,
-            submission: currentSubmission(),
-          });
-          renderChecks();
-        } catch (error) {
-          document.getElementById("error").textContent = error.message;
-          document.getElementById("error").style.display = "block";
-        }
-      });
-
-      document.getElementById("export").addEventListener("click", async () => {
-        try {
-          const result = await post("/export", {
-            report: { ...report, ...editedSections() },
-            format: value("format"),
-          });
-          download(result.filename, result.content);
-        } catch (error) {
-          document.getElementById("error").textContent = error.message;
-          document.getElementById("error").style.display = "block";
-        }
-      });
-
+      document.getElementById("sign").addEventListener("click", () => decide("signed", null));
+      document
+        .getElementById("return")
+        .addEventListener("click", () => decide("returned_for_correction", value("return-comment")));
+      document.getElementById("export").addEventListener("click", () => handoff("download"));
+      document.getElementById("copy").addEventListener("click", () => handoff("clipboard"));
+      document.getElementById("print").addEventListener("click", () => window.print());
+      document.getElementById("reset").addEventListener("click", resetScreen);
       document.getElementById("add-prior").addEventListener("click", addPrior);
+
+      function toggleTheme() {
+        const root = document.documentElement;
+        const dark =
+          root.dataset.theme === "dark" ||
+          (!root.dataset.theme && matchMedia("(prefers-color-scheme: dark)").matches);
+        root.dataset.theme = dark ? "light" : "dark";
+        show("theme", dark ? "Dark" : "Light");
+      }
+
+      function toggleReading() {
+        document.body.classList.toggle("reading");
+        show("reading", document.body.classList.contains("reading") ? "Reading off" : "Reading");
+      }
+
+      // The audit block is collapsed on screen and must not be collapsed on paper: a
+      // printed report that silently drops the provenance the reviewer read is a different
+      // document from the one that was approved, and the printout is what travels.
+      let printedBlocks = [];
+      addEventListener("beforeprint", () => {
+        printedBlocks = [...document.querySelectorAll("details")];
+        for (const block of printedBlocks) block.dataset.wasOpen = block.open ? "1" : "0";
+        for (const block of printedBlocks) block.open = true;
+      });
+      addEventListener("afterprint", () => {
+        for (const block of printedBlocks) block.open = block.dataset.wasOpen === "1";
+        printedBlocks = [];
+      });
+
+      document.getElementById("theme").addEventListener("click", toggleTheme);
+      document.getElementById("reading").addEventListener("click", toggleReading);
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          showError("");
+          return;
+        }
+        const command = event.ctrlKey || event.metaKey;
+        if (command && event.key === "Enter") {
+          event.preventDefault();
+          if (!report) draftWith(null);
+          else if (!document.getElementById("sign").disabled) decide("signed", null);
+          return;
+        }
+        if (command && event.shiftKey && (event.key === "C" || event.key === "c")) {
+          event.preventDefault();
+          handoff("clipboard");
+          return;
+        }
+        if (event.altKey && !command) {
+          const key = event.key.toLowerCase();
+          if (key === "r") {
+            event.preventDefault();
+            if (report) {
+              if (checking) clearTimeout(checking);
+              runCheck();
+            }
+          } else if (key === "n") {
+            event.preventDefault();
+            resetScreen();
+          } else if (key === "d") {
+            event.preventDefault();
+            toggleTheme();
+          } else if (key === "m") {
+            event.preventDefault();
+            toggleReading();
+          }
+        }
+      });
+
+      // The draft is in this tab and nowhere else. A refresh, a closed tab or an Alt+F4
+      // takes it with them, so the browser is asked to warn rather than to remember.
+      addEventListener("beforeunload", (event) => {
+        if (dirty) {
+          event.preventDefault();
+          event.returnValue = "";
+        }
+      });
+
+      for (const id of ["indication", "technique", "findings"]) {
+        const box = document.getElementById(id);
+        box.addEventListener("input", () => {
+          grow(box);
+          dirty = true;
+        });
+        grow(box);
+      }
 
       fetch("/health")
         .then((response) => response.json())
         .then((health) => {
-          show("service", `${health.skill} · copilot ${health.version} · Gateway ${health.gateway.gateway_base_url}`);
+          // Skill and version are useful to a radiologist. The Gateway's address is not,
+          // and printing an internal host on a clinical screen puts it in every screenshot,
+          // printout and photograph of the monitor.
+          show("service", `${health.skill} · copilot ${health.version}`);
           if (!health.gateway.gateway_api_key_configured) {
-            document.getElementById("error").textContent =
-              "No Gateway credential is configured on this service, so drafting will be refused.";
-            document.getElementById("error").style.display = "block";
+            showError(
+              "No Gateway credential is configured on this service, so drafting will be refused."
+            );
+            enable("draft", false);
           }
         })
-        .catch(() => show("indicator", "the copilot service is not reachable"));
+        .catch(() => {
+          show("service", "the copilot service is not reachable");
+          showError(GUIDE.network);
+          enable("draft", false);
+          const retry = document.createElement("button");
+          retry.type = "button";
+          retry.textContent = "Retry";
+          retry.addEventListener("click", () => location.reload());
+          document.getElementById("draft").after(retry);
+        });
     </script>
   </body>
 </html>

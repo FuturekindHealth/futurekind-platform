@@ -149,6 +149,35 @@ def test_the_reporting_screen_is_served_by_the_same_process() -> None:
         assert f"'{endpoint}'" in page or f'"{endpoint}"' in page
 
 
+def test_nothing_the_application_answers_can_be_cached_by_anything() -> None:
+    """Two radiologists share a workstation, and a department that puts this behind its own
+    proxy must not be able to leave one patient's draft in it. The rule covers the refusals
+    too: a 422 that names which check blocked a signature is the artefact most likely to be
+    screenshotted into a ticket, and it is also a response."""
+    app, _ = app_for(completion(fixture_text("normal_ct_head.json")))
+
+    draft = call(app, "POST", "/draft", DRAFT_BODY)
+    assert draft.status_code == 200
+    refused = call(app, "POST", "/draft", {"submission": {"clinical_indication": ""}})
+    unsigned = call(app, "POST", "/export", {"report": draft.json(), "format": "text"})
+
+    check_body = {"report": draft.json(), "submission": STUDY.model_dump()}
+    responses = {
+        "screen": call(app, "GET", "/"),
+        "health": call(app, "GET", "/health"),
+        "draft": draft,
+        "check": call(app, "POST", "/check", check_body),
+        "review_rejected_for_no_name": call(
+            app, "POST", "/review", {**review_body(draft.json()), "clinician": "   "}
+        ),
+        "refused_422": refused,
+        "export_before_signature": unsigned,
+    }
+    for name, response in responses.items():
+        assert response.headers["cache-control"] == "no-store", (name, response.status_code)
+        assert response.headers["x-content-type-options"] == "nosniff", name
+
+
 def test_draft_reports_the_policy_it_ran_under_to_the_caller() -> None:
     app, _ = app_for(completion(fixture_text("normal_ct_head.json")))
 

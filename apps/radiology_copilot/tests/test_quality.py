@@ -395,6 +395,55 @@ def test_a_lesion_reported_as_previously_seen_still_needs_the_earlier_study() ->
     assert "invented_history" in ids(check(draft))
 
 
+def test_comparing_a_lesion_with_the_brain_beside_it_is_not_a_refusal() -> None:
+    """The measured case. One of eleven ordinary dictated sentences the old list refused.
+
+    "Hypointense compared with the surrounding white matter" compares two structures inside
+    the study being reported. Refusing it with no prior supplied told the radiologist the
+    machine had found an invented history where there is only standard prose — and this check
+    catches none of the dataset's 306 hallucination probes either way, so the refusal bought
+    nothing. It is advisory now: still on the page, no longer in the way.
+    """
+    draft = {
+        **CLEAN,
+        "findings": CLEAN["findings"]
+        + " The lesion is hypointense compared with the surrounding white matter.",
+    }
+
+    quality = check(draft)
+    flagged = [f for f in quality.findings if f.check == "invented_history"]
+    assert [f.severity for f in flagged] == ["advisory"], flagged
+    assert quality.status != "blocking"
+
+
+def test_a_lesion_that_is_poorly_resolved_is_not_a_lesion_that_has_resolved() -> None:
+    """Small lesions are "poorly resolved on this sequence" every day, and the check read
+    that as a claim that something had resolved since an earlier study."""
+    draft = {
+        **CLEAN,
+        "findings": CLEAN["findings"] + " A small cortical lesion is poorly resolved.",
+    }
+
+    quality = check(draft)
+    assert [f.severity for f in quality.findings if f.check == "invented_history"] == ["advisory"]
+
+
+def test_a_comparison_word_that_names_the_earlier_exam_is_still_refused() -> None:
+    """Demoting the ambiguous phrases must not demote the sentence that is not ambiguous.
+
+    "Compared with" alone is anatomy; "compared with the prior study" is a history claim, and
+    it is caught by the temporal list, not by the advisory one.
+    """
+    draft = {
+        **CLEAN,
+        "findings": CLEAN["findings"]
+        + " The lesion is unchanged compared with the prior study.",
+    }
+
+    quality = check(draft)
+    assert [f.severity for f in quality.findings if f.check == "invented_history"] == ["block"]
+
+
 # -- 4. certainty escalation ----------------------------------------------------------------------
 
 
@@ -548,6 +597,34 @@ def test_a_structure_neither_dictated_or_drafting_is_pointed_at_without_refusing
 
     assert "structure_coverage" in {f.check for f in quality.findings}
     assert quality.status != "blocking"
+
+
+def test_an_always_firing_advisory_does_not_print_the_whole_template() -> None:
+    """The twelve-item wall. Measured, then capped.
+
+    Running the engine over the golden set's eight MRI brain cases (`audit-checks.py`,
+    `check_load`) showed this advisory firing on all eight and naming 9 to 12 of the
+    protocol's fourteen structures each time — a four-sentence dictation never mentions the
+    pituitary. A finding that reprints the template is read as decoration, and it pushed the
+    rest of the panel off the screen. The count stays exact; the list stops at six.
+    """
+    draft = {key: value for key, value in CLEAN.items() if key != "findings"}
+    draft["findings"] = "Unremarkable."
+    submitted = study(findings="Unremarkable.")
+
+    quality = evaluate(
+        draft,
+        submitted,
+        checked_at="2026-10-08T09:30:00Z",
+        structure_checklist=MRI_BRAIN.structures,
+    )
+
+    message = next(f.message for f in quality.findings if f.check == "structure_coverage")
+    listed = message.split(": ", 1)[1].split(". Advisory")[0]
+    names = listed.replace(" and 8 more", "").split(", ")
+    assert listed.endswith("and 8 more"), listed
+    assert len(names) == 6, listed
+    assert message.startswith("14 structure(s)"), message
 
 
 def test_a_full_structures_list_raises_nothing() -> None:

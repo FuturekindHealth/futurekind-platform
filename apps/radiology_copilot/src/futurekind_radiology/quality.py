@@ -63,31 +63,24 @@ _COUNT = re.compile(
     re.IGNORECASE,
 )
 
-#: Phrases that only mean something because an earlier study exists — each one
-#: asserts a comparison, not a description. Bare "interval" is deliberately absent:
-#: "review at interval" is a plan, and a check that blocks plans produces a tool
-#: the department routes around. Using one of these with no prior supplied invents
-#: the patient's history.
+#: Phrases that can only mean one thing: an earlier study exists, and this one was looked at
+#: against it. Every entry names a time or names the earlier exam, so a comparison between two
+#: structures in the same study cannot accidentally match.
 #:
-#: Each entry is the *whole* comparison phrase, and the two words that were dropped from
-#: this list say why. "previously" on its own caught "previously healed rib fractures",
-#: which is a radiologist dating a lesion, not comparing studies; "better than" caught
-#: "fits this pattern better than atherosclerosis", which is a differential and the exact
-#: reasoning the golden set asks for on that case. Both were found by running the engine
-#: over `GOLDEN_DATASET.yaml` in `scripts/validation/audit-checks.py`: a comparison check
-#: that refuses a correct rare-case report is a check the department will route around, and
-#: the temporal claim it was built to catch still arrives here in a form that says when.
-_COMPARISON = (
+#: The five phrases moved out of this list are the ones that cannot be told apart by their own
+#: spelling, and the split is a measurement rather than a judgement (`audit-checks.py`, the
+#: `check_load` table): the engine was run over eleven ordinary sentences a radiologist dictates
+#: into a brain report with no prior supplied, and the old single list refused five of them —
+#: "hypointense compared with the surrounding white matter", "a small cortical lesion is poorly
+#: resolved on this sequence", "as before in the differential". The same eleven-phrase run and
+#: the 306 measurable `must_not_say` probes show this check catches none of them either way, so
+#: narrowing it buys the false positives back and costs no measured detection.
+_COMPARISON_BLOCKING = (
     "unchanged",
     "no interval change",
     "interval progression",
     "stable since",
-    "compared with",
-    "compared to",
-    "in comparison",
-    "as before",
     "than before",
-    "resolved",
     "increased from",
     "decreased from",
     "prior study",
@@ -98,6 +91,18 @@ _COMPARISON = (
     "previously noted",
     "previously described",
     "as previously reported",
+)
+
+#: Comparison words that are a temporal claim in one sentence and an anatomical one in the
+#: next. Shown, never refused: a reviewer who has had a correct report blocked for comparing
+#: the lesion with the normal brain stops trusting the panel, and the panel is the only thing
+#: between a drafted measurement and a signature.
+_COMPARISON_ADVISORY = (
+    "compared with",
+    "compared to",
+    "in comparison",
+    "as before",
+    "resolved",
 )
 
 #: Certainty a hedged dictation cannot support. The golden set's `must_not_say`
@@ -321,33 +326,59 @@ def _check_measurements(
     return findings
 
 
-def _comparison_phrases(sections: dict[str, str]) -> list[str]:
-    combined = " ".join(text.lower() for _, text in _section_pairs(sections, SECTION_KEYS))
-    return [phrase for phrase in _COMPARISON if phrase in combined]
+def _ungrounded(
+    phrases: tuple[str, ...], combined: str, grounding: str
+) -> list[str]:
+    """Comparison phrases in the draft that the submitted text never mentioned."""
+    return [phrase for phrase in phrases if phrase in combined and phrase not in grounding]
 
 
 def _check_history(
     sections: dict[str, str], submission: StudySubmission
 ) -> list[QualityFinding]:
-    """Comparison language is a claim about an earlier report."""
-    used = _comparison_phrases(sections)
-    if not used or submission.has_priors:
+    """Comparison language is a claim about an earlier report.
+
+    Two severities because the words themselves are not always a claim about time. A draft
+    that says *unchanged* with nothing to compare against has invented the patient's history
+    and is refused; a draft that says *compared with* has most often compared two structures
+    in the study being reported, and is only worth showing.
+    """
+    if submission.has_priors:
         return []
+    combined = " ".join(text.lower() for _, text in _section_pairs(sections, SECTION_KEYS))
     grounding = submission.grounding_text
-    if any(phrase in grounding for phrase in used):
-        return []
-    return [
-        QualityFinding(
-            check="invented_history",
-            severity="block",
-            message=(
-                f"The draft says “{used[0]}” but no previous report was supplied, so the "
-                "comparison has nothing behind it. Either submit the earlier report or "
-                "remove the comparison."
-            ),
-            evidence=used[0],
-        )
-    ]
+
+    temporal = _ungrounded(_COMPARISON_BLOCKING, combined, grounding)
+    if temporal:
+        return [
+            QualityFinding(
+                check="invented_history",
+                severity="block",
+                message=(
+                    f"The draft says “{temporal[0]}” but no previous report was supplied, so "
+                    "the comparison has nothing behind it. Either submit the earlier report or "
+                    "remove the comparison."
+                ),
+                evidence=temporal[0],
+            )
+        ]
+
+    ambiguous = _ungrounded(_COMPARISON_ADVISORY, combined, grounding)
+    if ambiguous:
+        return [
+            QualityFinding(
+                check="invented_history",
+                severity="advisory",
+                message=(
+                    f"The draft says “{ambiguous[0]}” with no previous report supplied. If that "
+                    "refers to an earlier study, submit it — the comparison has nothing behind "
+                    "it. If it compares two structures in this study, as a radiology report "
+                    "routinely does, this note is expected and can be ignored."
+                ),
+                evidence=ambiguous[0],
+            )
+        ]
+    return []
 
 
 def _observation_units(text: str) -> list[str]:
@@ -542,6 +573,14 @@ def _check_absences(
     ]
 
 
+#: How many unmentioned structures one advisory is allowed to name. Measured on the golden
+#: set's eight MRI brain cases: when this check fires it lists 9 to 12 of the protocol's
+#: structures, every time, because a four-sentence dictation never mentions the pituitary. A
+#: finding that reprints the template is not a pointer and it pushes the rest of the panel off
+#: the screen, so the count stays exact and the list stops at six.
+_MAX_STRUCTURES_NAMED = 6
+
+
 def _check_structure_coverage(
     sections: dict[str, str],
     submission: StudySubmission,
@@ -562,13 +601,16 @@ def _check_structure_coverage(
     ]
     if not absent:
         return []
+    named = ", ".join(absent[:_MAX_STRUCTURES_NAMED])
+    if len(absent) > _MAX_STRUCTURES_NAMED:
+        named += f" and {len(absent) - _MAX_STRUCTURES_NAMED} more"
     return [
         QualityFinding(
             check="structure_coverage",
             severity="advisory",
             message=(
                 f"{len(absent)} structure(s) this protocol normally reports appear in neither "
-                f"the dictation nor the draft: {', '.join(absent)}. Advisory — a negative that "
+                f"the dictation nor the draft: {named}. Advisory — a negative that "
                 "was not dictated is still a negative the radiologist may state."
             ),
         )

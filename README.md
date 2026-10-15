@@ -81,11 +81,11 @@ is SPEC-10-04, deliberately left for ADR-0004 rather than changed mid-release.
 | Path | What it is | State |
 | --- | --- | --- |
 | `core/gateway/` | The Gateway: FastAPI service, catalogue, policy, routing, LiteLLM transport, OpenAI-compatible door, logging, metrics | **Built**, 492 tests |
-| `apps/radiology_copilot/` | The first clinical application on it: draft → check → review → sign → export for imaging studies | **Built**, 229 tests |
+| `apps/radiology_copilot/` | The first clinical application on it: draft → check → review → sign → export for imaging studies | **Built**, 255 tests |
 | `core/gateway/models.yaml` | The live catalogue: 6 authorised skills, their policy, and the aliases that serve them | Config, reviewed one skill at a time |
 | `configs/` | Platform manifest and LiteLLM's alias list | Config |
 | `compose.yaml` | One installation: postgres, redis, qdrant, litellm, gateway, open webui, behind profiles | Written and parsed; **never booted here** |
-| `docs/` | Constitution, ADRs, domain model, specification, architecture, product design, threat model | The bulk of this repository, deliberately |
+| `docs/` | Constitution, ADRs, domain model, specification, architecture, product design, threat model — and the application layer above them: product family, clinical suite, design system, hospital workflow, safety, commercial roadmap, vision | The bulk of this repository, deliberately. Start at [`docs/README.md`](docs/README.md), which says what each document owns |
 | `scripts/doctor/check-ai.sh` | Verifies the AI path is the path the architecture claims, including that LiteLLM is *not* reachable from the host | Runs on a deployed host |
 
 Six skills are authorised. **121** are designed and reviewed on paper in
@@ -235,3 +235,9 @@ Apache-2.0. See [LICENSE](LICENSE) and [docs/product/README.md](docs/product/REA
 
 FutureKind is clinical decision *support*. It does not diagnose, and no output from
 it is a clinical decision.
+
+---
+
+Start with [docs/README.md](docs/README.md), which says what each document owns and where it must stop.
+If you are joining the project, [docs/FIRST-WEEK.md](docs/FIRST-WEEK.md) is the seven-day path and
+[docs/BLUEPRINT.md](docs/BLUEPRINT.md) is the ten-year argument.

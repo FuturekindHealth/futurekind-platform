@@ -88,6 +88,11 @@ COLUMNS = (
     "confidence_before_approval",
     "false_hallucinations",
     "verdicts_recorded",
+    # The two absolute word counts, added because every percentage in this file is a ratio
+    # and a percentage cannot answer "how many words did I not have to type today". They are
+    # the machine's draft and the document that was signed, in words, for the same study.
+    "words_in_draft",
+    "words_signed",
 )
 
 #: Confidence is a word, not a number; the mean of the words needs an order, and this is the
@@ -349,6 +354,8 @@ class Session:
                 {"finding_sections": sorted(flagged_sections)}, human
             )["false_hallucinations"],
             "verdicts_recorded": len(verdicts),
+            "words_in_draft": sum(len(text.split()) for text in before.values()),
+            "words_signed": sum(len(text.split()) for text in after.values()) if approved else 0,
             # Not columns: the evidence the rankings are built from.
             "_blocking_checks": sorted({f.get("check", "") for f in blocking}),
             "_advisory_checks": sorted({f.get("check", "") for f in advisory}),
@@ -616,6 +623,183 @@ def metrics(rows: list[dict]) -> dict:
     }
 
 
+# --------------------------------------------------------------------------- analysis
+
+
+def _share(part: float, whole: float) -> float | None:
+    return round(part / whole, 3) if whole else None
+
+
+def _words(row: dict, key: str) -> int:
+    """A row resumed from a session written before this column existed has no word count.
+    Read it as zero rather than crashing an afternoon's work over a schema change."""
+    return int(row.get(key) or 0)
+
+
+def analysis(rows: list[dict], *, elapsed_seconds: float, clinician: str) -> dict:
+    """The readings a finished afternoon is asked to produce, from the recorded rows only.
+
+    Twenty studies is not a sample that carries a confidence interval, so each block says what
+    it measured and what it cannot. `trust` here is what the reviewer *did* against what the
+    badge said — never what they believed, which no instrument records — and the trend is by
+    closing order, not by clock, because a study reopened the next morning is one row.
+    """
+    signed = [row for row in rows if row["final_approval"] == "signed"]
+    abandoned = [row for row in rows if row["final_approval"] != "signed"]
+    review = [float(row["review_seconds"]) for row in rows]
+    generation = [float(row["generation_seconds"]) for row in rows]
+    approval = [float(row["approval_seconds"]) for row in rows]
+    hands_on_keyboard = sum(review) + sum(approval)
+
+    slowest = sorted(rows, key=lambda row: -float(row["review_seconds"]))[:3]
+    section_edits = Counter(
+        key for row in rows for key in (row["sections_edited"] or "").split(",") if key
+    )
+    drafted = sum(_words(row, "words_in_draft") for row in rows)
+    final = sum(_words(row, "words_signed") for row in rows)
+    typed_by_hand = sum(int(row["words_added"]) for row in rows)
+
+    trust: dict[str, dict] = {}
+
+    for level in CONFIDENCE_ORDINAL:
+        group = [row for row in rows if row["confidence_before_approval"] == level]
+        if not group:
+            continue
+        trust[level] = {
+            "studies": len(group),
+            "signed": sum(1 for row in group if row["final_approval"] == "signed"),
+            "mean_edit_distance": _mean([float(row["edit_distance"]) for row in group]),
+            "mean_review_seconds": _mean([float(row["review_seconds"]) for row in group]),
+            "mean_words_added": _mean([float(int(row["words_added"])) for row in group]),
+        }
+
+    half = len(rows) // 2
+    halves = {}
+    for label, part in (("first_half", rows[:half]), ("second_half", rows[half:])):
+        halves[label] = {
+            "studies": len(part),
+            "mean_blocking_findings": _mean([float(row["blocking_findings"]) for row in part]),
+            "mean_advisory_findings": _mean([float(row["advisory_findings"]) for row in part]),
+            "mean_edit_distance": _mean([float(row["edit_distance"]) for row in part]),
+            "mean_review_seconds": _mean([float(row["review_seconds"]) for row in part]),
+            "mean_typing_reduction_pct": _mean(
+                [float(row["typing_reduction_pct"]) for row in part]
+            ),
+        }
+
+    minutes_room = round(elapsed_seconds / 60, 1)
+    minutes_hands = round(hands_on_keyboard / 60, 1)
+    return {
+        "session_summary": {
+            "clinician": clinician,
+            "studies": len(rows),
+            "signed": len(signed),
+            "abandoned": len(abandoned),
+            "minutes_in_the_room": minutes_room,
+            "minutes_reviewing": minutes_hands,
+            "minutes_generating": round(sum(generation) / 60, 1),
+            "share_of_measured_time_watching_the_model": _share(
+                sum(generation), hands_on_keyboard + sum(generation)
+            ),
+            # A rate off an 18-second denominator is not a rate, it is noise dressed as one.
+            "studies_per_hour": (
+                round(len(rows) / (elapsed_seconds / 3600), 2) if elapsed_seconds >= 600 else None
+            ),
+            "consistency_warning": (
+                (
+                    "review time reported by the screen exceeds the wall clock of this "
+                    "session, so the durations were supplied rather than lived — a scripted "
+                    "run, not an afternoon"
+                )
+                if minutes_hands > minutes_room
+                else ""
+            ),
+            "note": (
+                "minutes_in_the_room is wall clock from launch to the last study closed and "
+                "includes every pause; the review and generation totals do not"
+            ),
+        },
+        "time_analysis": {
+            "generation_seconds": _percentiles(generation),
+            "review_seconds": _percentiles(review),
+            "approval_seconds": _percentiles(approval),
+            "slowest_reviews": [
+                {
+                    "study_id": row["study_id"],
+                    "review_seconds": row["review_seconds"],
+                    "blocking_findings": row["blocking_findings"],
+                    "edit_distance": row["edit_distance"],
+                }
+                for row in slowest
+            ],
+        },
+        "edit_analysis": {
+            "drafts_accepted_untouched": sum(
+                1 for row in signed if int(row["edits"]) == 0
+            ),
+            "sections_edited_total": sum(int(row["edits"]) for row in rows),
+            "most_edited_section": (section_edits.most_common(1)[0][0] if section_edits else None),
+            "edits_by_section": dict(section_edits),
+            "words_added_total": typed_by_hand,
+            "words_removed_total": sum(int(row["words_removed"]) for row in rows),
+        },
+        "acceptance_analysis": {
+            "signed": len(signed),
+            "abandoned": len(abandoned),
+            "abandoned_after_a_supported_draft": sum(
+                1
+                for row in abandoned
+                if row["confidence_before_approval"] == "supported"
+            ),
+            "redrafts": sum(int(row["redrafts"]) for row in rows),
+            "studies_needing_a_redraft": sum(1 for row in rows if int(row["redrafts"]) > 0),
+        },
+        "trust_analysis": {
+            "by_confidence_level": trust,
+            "reading": (
+                "what the reviewer did after each badge, not what they thought of it. A "
+                "supported draft that was rewritten anyway is the interesting row: it means "
+                "the gate passed something the radiologist did not trust"
+            ),
+            "blocking_findings_signed_without_a_verdict": sum(
+                1 for row in rows for _ in row.get("_blocking_untouched", [])
+            ),
+        },
+        "quality_trend": {
+            **halves,
+            "note": (
+                "by closing order across one afternoon; two studies either way is a hint, "
+                "not a result"
+            ),
+        },
+        "reviewer_statistics": {
+            "reviewers_in_this_session": 1,
+            "clinician": clinician,
+            "limit": (
+                "one name is typed at launch, so per-reviewer comparison needs a name per "
+                "study — recorded when a second reader joins the afternoon"
+            ),
+        },
+        "productivity": {
+            "words_the_model_wrote": drafted,
+            "words_in_the_signed_reports": final,
+            "words_the_reviewer_typed": typed_by_hand,
+            "words_not_typed": max(final - typed_by_hand, 0),
+            "words_not_typed_note": (
+                "signed-report words that were not added by hand, so they came from the draft; "
+                "an abandoned study contributes its typing but no signed words, which is why "
+                "this is never larger than the drafts"
+            ),
+            "minutes_reviewing": round(hands_on_keyboard / 60, 1),
+            "words_not_typed_per_minute_reviewing": (
+                round((final - typed_by_hand) / (hands_on_keyboard / 60), 1)
+                if hands_on_keyboard
+                else None
+            ),
+        },
+    }
+
+
 # --------------------------------------------------------------------------- rankings
 
 
@@ -831,6 +1015,11 @@ def _report_payload(session: Session) -> dict:
     return {
         "metrics": metrics(session.rows),
         "rankings": rankings(session.rows, session.phrases),
+        "analysis": analysis(
+            session.rows,
+            elapsed_seconds=time.time() - session.started_at,
+            clinician=session.clinician,
+        ),
     }
 
 
@@ -838,17 +1027,23 @@ def write_files(session: Session) -> dict[str, str]:
     """Numbers always, phrases when asked for, and a printed report either way."""
     rows = [_numbers(row) for row in session.rows]
     out = session.out_dir
-    measures = metrics(session.rows)
-    tables = rankings(session.rows, session.phrases)
+    payload = _report_payload(session)
+    measures, tables, reading = (
+        payload["metrics"],
+        payload["rankings"],
+        payload["analysis"],
+    )
 
     _write_csv(out / "rows.csv", COLUMNS, rows)
     (out / "rows.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
     (out / "metrics.json").write_text(json.dumps(measures, indent=2), encoding="utf-8")
+    (out / "analysis.json").write_text(json.dumps(reading, indent=2), encoding="utf-8")
 
     written = {
         "rows_csv": str(out / "rows.csv"),
         "rows_json": str(out / "rows.json"),
         "metrics_json": str(out / "metrics.json"),
+        "analysis_json": str(out / "analysis.json"),
     }
     for name, table in tables.items():
         if not table:
@@ -868,7 +1063,7 @@ def write_files(session: Session) -> dict[str, str]:
         (out / "phrases.json").write_text(json.dumps(session.phrases, indent=2), encoding="utf-8")
         written["phrases_csv"] = str(out / "phrases.csv")
 
-    report = render_report(measures, tables, session)
+    report = render_report(measures, tables, session, reading)
     (out / "report.md").write_text(report, encoding="utf-8")
     written["report_md"] = str(out / "report.md")
     return written
@@ -887,7 +1082,7 @@ def _write_csv(path: Path, columns: tuple[str, ...] | tuple, rows: list[dict]) -
         writer.writerows(rows)
 
 
-def render_report(measures: dict, tables: dict, session: Session) -> str:
+def render_report(measures: dict, tables: dict, session: Session, reading: dict) -> str:
     lines = [
         f"# Radiology Copilot validation session — {session.clinician}",
         "",
@@ -933,6 +1128,85 @@ def render_report(measures: dict, tables: dict, session: Session) -> str:
     lines += ["", "### Section rewrite frequency", ""]
     for key, share in measures["section_rewrite_frequency"].items():
         lines.append(f"- `{key}`: {share}")
+
+    session_summary = reading["session_summary"]
+    productivity = reading["productivity"]
+    lines += [
+        "",
+        "## Where the afternoon went",
+        "",
+        f"- {session_summary['minutes_in_the_room']} minutes in the room, "
+        f"{session_summary['minutes_reviewing']} of them on the keyboard, "
+        f"{session_summary['minutes_generating']} watching the model write "
+        f"({session_summary['share_of_measured_time_watching_the_model']} of measured time)",
+        f"- {session_summary['studies_per_hour'] or 'not enough session to rate'} studies an "
+        f"hour, {session_summary['studies']} studies for {session_summary['clinician']}",
+        f"- p95 review {reading['time_analysis']['review_seconds'].get('p95', '—')} s, "
+        f"p95 generation {reading['time_analysis']['generation_seconds'].get('p95', '—')} s",
+        "",
+        "| Slowest reviews | seconds | blocking findings | edit distance |",
+        "| --- | --- | --- | --- |",
+    ]
+    for row in reading["time_analysis"]["slowest_reviews"]:
+        lines.append(
+            f"| {row['study_id']} | {row['review_seconds']} | "
+            f"{row['blocking_findings']} | {row['edit_distance']} |"
+        )
+
+    edits = reading["edit_analysis"]
+    acceptance = reading["acceptance_analysis"]
+    lines += [
+        "",
+        "## What the reviewer did with the draft",
+        "",
+        f"- {edits['drafts_accepted_untouched']} of {measures['studies_signed']} signed "
+        f"drafts accepted untouched",
+        f"- most edited section: `{edits['most_edited_section'] or '—'}`; "
+        f"{edits['words_added_total']} words typed by hand, "
+        f"{edits['words_removed_total']} of the machine's words removed",
+        f"- {acceptance['abandoned']} abandoned, "
+        f"{acceptance['abandoned_after_a_supported_draft']} of them after the badge said "
+        f"*supported* — the row worth reading first",
+        f"- {acceptance['studies_needing_a_redraft']} studies needed a redraft "
+        f"({acceptance['redrafts']} redrafts in all)",
+        "",
+        "## What the machine wrote that was kept",
+        "",
+        f"- {productivity['words_the_model_wrote']} words drafted, "
+        f"{productivity['words_in_the_signed_reports']} words signed, "
+        f"{productivity['words_the_reviewer_typed']} words typed by hand",
+        f"- **{productivity['words_not_typed']} words the radiologist did not type**, at "
+        f"{productivity['words_not_typed_per_minute_reviewing']} per minute of reviewing",
+        f"- {productivity['words_not_typed_note']}",
+        "",
+        "## Trust, read from what the reviewer did",
+        "",
+        "| Badge before approval | studies | signed | mean edit distance | mean review s | "
+        "mean words added |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for level, values in reading["trust_analysis"]["by_confidence_level"].items():
+        lines.append(
+            f"| {level} | {values['studies']} | {values['signed']} | "
+            f"{values['mean_edit_distance']} | {values['mean_review_seconds']} | "
+            f"{values['mean_words_added']} |"
+        )
+    lines += ["", f"*{reading['trust_analysis']['reading']}*", "", "## Across the afternoon", ""]
+    for label in ("first_half", "second_half"):
+        part = reading["quality_trend"][label]
+        count = part["studies"]
+        lines.append(
+            f"- {label.replace('_', ' ')} ({count} "
+            f"{'study' if count == 1 else 'studies'}): blocking "
+            f"{part['mean_blocking_findings']}, advisory {part['mean_advisory_findings']}, "
+            f"edit distance {part['mean_edit_distance']}, review "
+            f"{part['mean_review_seconds']} s, typing reduction "
+            f"{part['mean_typing_reduction_pct']}%"
+        )
+    lines.append(f"*{reading['quality_trend']['note']}*")
+    if session_summary["consistency_warning"]:
+        lines += ["", f"**Warning:** {session_summary['consistency_warning']}."]
+
     for title, key in (
         ("Top AI mistakes", "top_ai_mistakes"),
         ("Top human edits", "top_human_edits"),
@@ -1049,7 +1323,9 @@ def make_handler(session: Session):
                 self._json(200, _report_payload(session))
             elif path == "/report":
                 payload = _report_payload(session)
-                page = render_report(payload["metrics"], payload["rankings"], session)
+                page = render_report(
+                    payload["metrics"], payload["rankings"], session, payload["analysis"]
+                )
                 self._send(200, _report_html(page), "text/html; charset=utf-8")
             elif path == "/api/rows":
                 self._json(200, {"rows": [_numbers(row) for row in session.rows]})
