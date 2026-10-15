@@ -1,0 +1,7 @@
+{
+  "technique": "MRI brain with contrast; axial T1, T2, FLAIR and DWI with post-contrast sequences.",
+  "findings": "There is opacification of the left mastoid air cells with erosion of the surrounding bone. An 18 mm rim-enhancing collection lies in the left temporal lobe and shows restricted diffusion centrally, with 6 mm of adjacent cerebritis. There is 7 mm of midline shift to the right. The sigmoid sinus does not enhance. The ventricles are compressed on the left and the basal cisterns remain patent.",
+  "impression": "Left temporal brain abscess with surrounding cerebritis, mass effect and shift, with sigmoid sinus thrombosis, secondary to coalescent mastoiditis.",
+  "recommendations": "Immediate joint neurosurgical and ENT management, and intravenous antibiotics chosen to cross the blood-brain barrier. Lumbar puncture is contraindicated with this degree of shift.",
+  "follow_up": "Repeat imaging if the neurological examination deteriorates, and after drainage to reassess the collection and the shift."
+}

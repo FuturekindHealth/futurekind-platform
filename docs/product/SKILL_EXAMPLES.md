@@ -10,9 +10,10 @@ catalogue header has read everything that constrains a skill.
 
 Three things are true of all twelve and are stated once rather than twelve times.
 
-**1. Only four of these skills exist in the platform today.** Live skills are
+**1. Not one of these twelve skills is reachable today.** The live catalogue holds six —
 `platform-chat`, `radiology-report`, `pathology-review`, `clinical-chat`,
-`summarize-document` (`core/gateway/models.yaml`). Every other skill named in this
+`summarize-document` and `usg-advisory-suggestions` (`core/gateway/models.yaml`) — and none of
+them is one of the twelve expanded here. Every other skill named in this
 repository is a *design* until its stanza is copied into `models.yaml` by hand, together
 with its alias in `configs/litellm/config.yaml` — and the Gateway's startup check
 refuses a half-made change (SPEC-07-03). So most responses below are annotated
@@ -21,7 +22,7 @@ refuses a half-made change (SPEC-07-03). So most responses below are annotated
 ```json
 { "error": { "code": "unknown_skill", "message": "Skill 'ed-chest-pain-pathway' is not declared in the model catalogue",
   "retryable": false, "request_id": "fk-7c1d…", "details": { "skill": "ed-chest-pain-pathway",
-  "known_skills": ["clinical-chat", "pathology-review", "platform-chat", "radiology-report", "summarize-document"] } } }
+  "known_skills": ["clinical-chat", "pathology-review", "platform-chat", "radiology-report", "summarize-document", "usg-advisory-suggestions"] } } }
 ```
 
 That is the correct behaviour and it is why the library can hold 121 entries safely: an

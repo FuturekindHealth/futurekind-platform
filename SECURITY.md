@@ -101,7 +101,10 @@ and the platform does not accept that as a promise anyone has to remember to kee
   the field's location; never the rejected value.
 - **No identifiers are invented here.** There is no MRN format, no patient id column and
   no PHI table. The Gateway is stateless with respect to clinical content, and the
-  copilot holds a draft only in memory: the system of record stays the hospital's.
+  copilot holds a draft only in memory: the review screen keeps the working draft in the
+  page, writes nothing to `localStorage` or a cookie, fetches no script or font from
+  outside the process, and closes the moment the tab does. The system of record stays the
+  hospital's.
 - **Credentials are not identity.** Today a caller presents a shared API key, so an
   audit line can say *which application* and not *which clinician*. Per-user identity is
   ADR-0004, and until it exists no audit record here can identify a person.

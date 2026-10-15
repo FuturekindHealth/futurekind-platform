@@ -99,6 +99,56 @@ Steps are the same for every modality; where they differ, §2 gives the per-moda
 table. Times are **targets**, and the measured column states honestly what has been
 measured: only the platform plumbing, against a stub backend, on one machine.
 
+The path the Alpha copilot actually runs today, drawn from the code rather than from intent —
+one study, one tab, with every branch the screen handles. The numbered failures are §3's rows.
+
+```
+ clinician at the console                     copilot (stateless)                    Gateway
+ ────────────────────────                     ────────────────                     ─────────
+ study + modality + indication  ┐
+ + technique (may be blank)     │
+ + dictation of what was seen   ├─ POST /draft ──────── governance check ─────────▶ skill
+ + previous reports (optional)  │        │               (policy, risk, downgrade)   only,
+                                ┘        │                                              never
+                                         ▼                                              a model
+                              answer readable as a report?
+                                │            │              │
+                          prose/JSON bad  truncated      five sections present
+                          F1, F26          F4              │
+                             │               │             ▼
+                          502 / 503        502      findings, impression,
+                       (no draft, nothing  (no draft  recommendations, follow_up
+                        lost: F24-F27)      withheld)        + technique if none was given
+                             │               │             │
+                             └──────┬───────┘             ▼
+                                          nine deterministic checks over the text
+                                          against the submission ── quality.scope
+                                                             │
+                                        ┌────────────────────┴───────────────────┐
+                                     block                                    advisory
+                                 F10,F19-F23                                shown, signing proceeds
+                                    │
+                        draft IS returned, with the finding on it ── confidence computed
+                                    │                                (never the model's own)
+                                    ▼
+                    radiologist edits the sections it owns ── POST /check on every pause
+                    indication locked · technique locked only when the department
+                    supplied it (ownership decides locking, report.py) · prose editable
+                                    │
+                          blocking findings remain? ── yes ──> sign refused, 422
+                                    │ no                       naming the check and the
+                                    ▼                          section, never the text (F12)
+                         name typed ── POST /review ── checks re-run on the signed text
+                                    │                     a rewritten section's findings
+                                    ▼                     fall to advisory
+                          POST /export (text | markdown | json)   409 until signed (F30)
+                                    │
+                     copy for the RIS · print · save as PDF (same DOM, print stylesheet)
+                                    │
+                                    ▼
+                          Alt+N → next study. Nothing persisted: F28, threat model §3
+```
+
 ### S0 — Registration and order (ERP)
 
 | Attribute | Specification |
@@ -173,9 +223,9 @@ This is the step the product exists for.
 | Attribute | Specification |
 | --- | --- |
 | User | Reporting radiologist (CT, MRI, X-ray, Mammography) or sonographer-clinician (ultrasound) |
-| Input | Clinical indication (from S0, never re-typed), modality and study name, technique if the department holds it, the clinician's dictated or typed observations. For ultrasound: the organ-by-organ composer state instead of prose |
-| Output | The nine-part report document: five clinical sections, `metadata`, `model_provenance`, `skill`, `policy` — with status `pending_review` |
-| AI action | `POST /chat {"skill": "radiology-report", …}` → Gateway resolves skill → capability `reasoning` → alias `fk-reasoning` → LiteLLM chooses the deployment → `ollama/qwen3:14b`. The model authors `findings`, `impression`, `recommendations` and (only when no technique was supplied) the technique declaration. The `clinical_indication` and a supplied `technique` are taken from the submission, never from the answer |
+| Input | Clinical indication (from S0, never re-typed), modality and study name, technique if the department holds it, the clinician's dictated or typed observations, and any previous report the department supplies for comparison (≤5, ≤2 000 characters each, ≤6 000 in total). For ultrasound: the organ-by-organ composer state instead of prose |
+| Output | The twelve-part report document: six clinical sections (`clinical_indication`, `technique`, `findings`, `impression`, `recommendations`, `follow_up`), `quality`, `confidence`, `metadata`, `model_provenance`, `skill`, `policy` — with status `pending_review` |
+| AI action | `POST /chat {"skill": "radiology-report", …}` → Gateway resolves skill → capability `reasoning` → alias `fk-reasoning` → LiteLLM chooses the deployment → `ollama/qwen3:14b`. The model authors `findings`, `impression`, `recommendations`, `follow_up` and (only when no technique was supplied) the technique declaration. The `clinical_indication` and a supplied `technique` are taken from the submission, never from the answer. `quality` and `confidence` are computed by the copilot, not authored by the model — nine deterministic text-grounding checks and one computed grade, so nothing here is the model grading itself |
 | Doctor action | Starts the draft, then reads it section by section. Nothing is accepted by a single button that also signs |
 | Approval | **None granted here.** The document leaves this step explicitly unsigned, and the UI must not let a keyboard shortcut imply otherwise |
 | Audit | Three Gateway lines, none carrying text: `skill_audit` (`{request_id, skill, capability, clinical_risk, approval_required, alias, answered, provider, model, downgrades_allowed}`, `service.py:342-355`), `chat_completed` (`{… attempts, degraded, latency_ms, prompt_tokens, completion_tokens, content_chars}`, `service.py:448-465`) and `request_completed` (`{… status, duration_ms, caller}`, where `caller` is an 8-hex digest of the credential, never the key — `app.py:349-357`, `deps.py:67-73`), plus a copilot-side record of prompt version and the section text the model returned. **No prompt or completion text in any Gateway log** — the copilot stores the document because the document is the clinical artefact, not a log |
@@ -190,9 +240,9 @@ This is the step the product exists for.
 | Attribute | Specification |
 | --- | --- |
 | User | Reporting radiologist |
-| Input | The draft sections, the study in OHIF, the prior study |
+| Input | The draft sections, the study in OHIF, the prior study, and — for the copilot — the prior **report text** submitted with the study as `previous_reports`. The copilot compares against that text only; it never sees pixels |
 | Output | A verified draft: sections edited to match what the images actually show, and the report still unsigned |
-| AI action | `prior-study-comparison` on request — describes change per lesion between the current dictation and the prior *report text*, never the prior pixels. `differential-diagnosis-check` on request for cases the reporter is uncertain about |
+| AI action | `prior-study-comparison` on request — describes change per lesion between the current dictation and the prior *report text*, never the prior pixels. `differential-diagnosis-check` on request for cases the reporter is uncertain about. Both are designs (`docs/product/SKILL_LIBRARY.yaml`); the drafting path is the only one that runs |
 | Doctor action | Looks at the images. This step exists to make the AI draft a starting point rather than an answer to be rubber-stamped |
 | Approval | None yet |
 | Audit | Section-level edits are recorded as `metadata.review.amendments` at S6; the viewer launch itself is recorded by the ERP |
@@ -207,16 +257,16 @@ This is the step the product exists for.
 | Attribute | Specification |
 | --- | --- |
 | User | The reporting radiologist, individually authenticated |
-| Input | The verified document, the clinician's name and registration number, optional amendments, optional comment |
-| Output | The same document with `metadata.review.state = "signed"`, `clinician`, `reviewed_at`, `amendments`; then exported |
-| AI action | **None, by construction.** No model call can sign. There is no endpoint that accepts an approval from an AI path, and the copilot's review body has no field an automated caller could satisfy with a boolean |
-| Doctor action | Signs. Amending is normal, expected, and never locks the document — a signed report can be reviewed again and re-exported |
+| Input | The verified document, **the submission it was drafted from** (no submission, no signature — the checks have nothing to compare the edited text against), the clinician's name and registration number, optional amendments, optional comment |
+| Output | The same document with `metadata.review.state = "signed"`, `clinician`, `reviewed_at`, `amendments`, and the quality pass and confidence recomputed over the amended text; then exported |
+| AI action | **None, by construction.** No model call can sign. There is no endpoint that accepts an approval from an AI path, and the copilot's review body has no field an automated caller could satisfy with a boolean. A blocking quality finding also refuses the sign-off — `{"blocking": [{check, section}], "sections": […]}`, check names and section names only, never the clinical text |
+| Doctor action | Signs. Amending is normal, expected, and never locks the document — a signed report can be reviewed again and re-exported. A section they rewrote has its findings downgraded to advisory, because the image rather than the dictation is their source of truth; the downgrade follows the section they edited, not a flag that says a human has been involved |
 | Approval | This is the approval. Two implementations, deliberately: the copilot writes it into the document (`copilot.py::review`) and the ERP writes its own signature and verification columns (`patient-reports.ts:2371,2574` — `sign`, `verify`, with `signedByName`, `signedAt`, `verifiedByName`, `verifiedAt`, `patientReports.ts:38-46`) |
 | Audit | Copilot: who, when, which sections a human rewrote. ERP: signature id, registration number, and a role check that refuses to sign as `typist|ai|system|bot` (`radiologyD1FinalWriter.ts:76`) — that ERP guard is exactly the rule this product needs, and it is already written |
 | Possible failures | Single shared credential pretending to be an individual signature (see the note below); signature recorded in one system and not the other; withdrawal after a report has been delivered; two reviewers editing one document |
 | Recovery | The ERP already supports `withdraw-signature` and `amend` (`patient-reports.ts:2869,1555`); a withdrawal after delivery is an amendment with a reason, not a deletion, and both systems keep their own trail keyed by the same `report_id` |
 | Latency | Under 2 s. Sign-off must never feel expensive, or people will batch it |
-| UI | Approval Screen: the four sections, the diff against the model's original text, the name and registration pre-filled from the session, one confirm that states what is being attested |
+| UI | Approval Screen: the six sections, the quality findings and the computed confidence above them, the diff against the model's original text, the name and registration pre-filled from the session, one confirm that states what is being attested. While any finding is blocking, the confirm is disabled |
 | API | FutureKind `POST /review` then `POST /export`; ERP `POST /api/internal/reporting-studio/finalize` (`internal-reporting-studio.ts:736-750`) |
 
 > **The blocking identity defect.** The USG studio authenticates with **one shared PIN**
@@ -382,23 +432,46 @@ document.
 | # | Failure | Where | What the user sees | Recovery / required behaviour |
 | --- | --- | --- | --- | --- |
 | F1 | Model returns prose instead of one JSON object | S4 | Empty draft, reason "model output could not be parsed" | Keep the dictation intact; offer re-draft once; never partially populate |
-| F2 | A required section is missing or empty | S4 | The four named missing sections | Draft is not offered for signing until sections exist; `parse_model_answer` records them explicitly |
-| F3 | Extra sections the skill did not ask for | S4 | Nothing visible; recorded in `metadata.extra_sections` | Discard and record, never silently merge (`report.py` treats extras as data, not text) |
+| F2 | A required section is missing or empty | S4 | The named missing sections, out of the five the model is asked for | Draft is not offered for signing until sections exist; `parse_model_answer` records them explicitly |
+| F3 | Extra sections the skill did not ask for | S4 | Nothing visible; recorded in `metadata.extra_sections`. A returned `confidence` or `certainty` key raises an advisory finding naming it | Discard and record, never silently merge (`report.py` treats extras as data, not text). A model's own confidence is never shown: the `confidence` block is computed |
 | F4 | `finish_reason == "length"` — the answer ran out of tokens | S4 | "Output truncated — not a draft" | Hard refuse. A truncated impression is the most dangerous possible artefact in this product |
 | F5 | Degraded substitution (a lesser model answered) | S4 | Explicit degraded label in provenance, and the copilot refuses to export it | `allow_downgrade: false` in the skill policy; P13 says label it, this product says block it |
 | F6 | Gateway unreachable | S4 | "AI unavailable" banner; the composer is fully usable | Manual dictation path always available; queue falls back as in S3 |
 | F7 | Policy not enforced (missing skill/policy block) | S4 | 503 and no document | Already fail-closed in `copilot.py::_check_governance` before parsing |
 | F8 | Timeout at the skill ceiling (90 s) | S4 | Reason: timed out, with the elapsed time shown | Offer retry once with lower temperature, then stop; no silent infinite retry |
 | F9 | Study text contains nothing for the model to describe | S4 | Empty draft, "no findings were dictated" | Correct behaviour. The product must not invent |
-| F10 | Hallucinated finding or invented measurement | S5 | Nothing — this is the failure the UI cannot show | §4. Section-by-section acceptance, prior diff, and CT/MRI measurements must be typed by the human |
+| F10 | Hallucinated finding or invented measurement | S5 | **Partly visible now, and the rest is measured as invisible.** A number that is in neither the submission nor a supplied prior raises `unsupported_measurement`, which blocks sign-off; a finding that was never dictated but is clinically plausible is not detectable from text, and `quality.scope` says so on the screen. Sprint 10 put a number on that sentence: run against the golden set's 310 `must_not_say` probes, the gate newly blocked **3 of the 306 measurable probes** — all three measurements — and 269 of the misses raised nothing at all | Sprint 9 moved this from a §4 hope to an executed check. Measurements in assertive prose are refused, not warned about; §4 still carries section-by-section acceptance and the prior diff, because the images remain the only oracle |
 | F11 | Restated clinical indication replacing the clinician's own | S4 | Was the Sprint 7 live defect | Structural: `clinical_indication` is taken from the submission, never from the answer |
-| F12 | Automation bias — sign without reading | S6 | Looks like success | §4 requirements; measure the amendment rate, not the throughput |
+| F12 | Automation bias — sign without reading | S6 | Looks like success | §4 requirements; measure the amendment rate, not the throughput. Sprint 9 adds the mechanical half: signing requires the submission, the checks re-run over the amended text, and a blocking finding refuses the signature — so the cheapest way through the gate is to read the flagged sentence |
 | F13 | Shared credential used to sign | S6 | Nothing | Blocking for Beta. Individual authentication of the signer |
 | F14 | Amended report delivered as a duplicate | S7 | Two reports | Idempotency key on `report_id` + `sequenceNumber`; the ERP version chain already labels supersession |
 | F15 | PACS archive fails after delivery | S8 | Report is signed and delivered, not filed | Retry with backoff, show the *not filed* state; never block the reporter |
 | F16 | Critical finding flagged, no one reachable | S10 | Escalation owed | Ladder to duty manager; unacknowledged items migrate to the next shift queue |
 | F17 | Prompt injection through the dictation or an attached document | S4 | Possibly a confident wrong report | Threat model §3: the dictation is untrusted input to a clinical act; skill instructions are fixed server-side and `extra_instructions` is only ever human-supplied |
 | F18 | PHI leaves the installation | S4/S7 | Nothing — invisible by design | Threat model §4: local-only default, no cross-hospital path without a P14 amendment, no prompt or completion text in any log |
+| F19 | A dictated observation compressed out of the findings | S4 | `dropped_observation`, **blocking**, quoting the observation that went missing | Sprint 9. Dropping is the mirror of inventing and was the more common failure; the findings must carry every dictated observation. A clinician who meant to drop one corrects the dictation or the section — the sign-off does not proceed quietly |
+| F20 | "Unchanged from prior" with no prior in the record | S4 | `invented_history`. A phrase that dates the finding — "unchanged", "no interval change", "stable since", "prior study", "as previously described" — is **blocking**; the five that cannot be told apart by their own spelling ("compared with", "compared to", "in comparison", "as before", "resolved") are **advisory**, with a message that asks which one it is | Either submit the earlier report text or describe only this study. Genesis Night 2 split the list after measuring it: run over eleven ordinary dictated sentences the single blocking list refused four correct ones — "hypointense compared with the surrounding white matter", "a small cortical lesion is poorly resolved" — and the check catches none of the 306 measurable hallucination probes under either version, so the narrowing cost no detection. `_prior_block()` tells the model the same thing before it answers |
+| F21 | An equivocal dictation settled into a definite impression | S4 | `unsupported_certainty`, **blocking** | A hedged finding stays hedged. A differential and a confirmation are different clinical documents, and only one of them can be acted on |
+| F22 | Markdown, bullets or headings inside a section that will be printed | S4 | `format_breach`, **blocking** | The export is the artefact a referrer reads; markup in it is a defect with a visible face. Refused rather than stripped, because stripping is this application writing the report |
+| F23 | A name, MRN or accession invented into the prose | S4 | `invented_identifier`, **blocking** | The submission schema has no identifier field, so there is nothing to invent *from*; a patient who does not exist in the record must not reach the report |
+| F24 | The service is not reachable at all | S4 | Header says the copilot cannot be reached, Draft is disabled and a Retry appears; a draft attempted anyway names the same thing without a stack trace | Genesis Night 2. `GET /health` decides the button's state on load; the dictation stays on the screen because nothing was ever sent |
+| F25 | The model takes a long time | S4 | A running clock — "Drafting… 21s, a draft can legitimately take a couple of minutes" — and a Cancel button | The Gateway's policy ceiling is 90 s and this application waits 120 s, so a radiologist used to stare at an unchanged screen for two minutes and decide the product had died. Cancel aborts the fetch, keeps the dictation, files nothing |
+| F26 | Something between the browser and the service answers without JSON | S4 | "The service answered 502 without the JSON this screen expects, so there is no draft and nothing was filed" | A proxy error page, a crashed worker or a maintenance HTML page used to surface the browser's own parse error, which is not a clinical sentence. The raw body is never printed — it is where a traceback could carry submitted text, and a screenshot of that box travels |
+| F27 | A form field the endpoint will not accept | S4 | The field names and what is wrong with each, never the values | The envelope already stripped `input` and `ctx` server-side; the screen used to say "the field names are listed above" and list nothing. Proved against the missing indication |
+| F28 | The browser refreshes, or the tab closes, mid-draft | S4/S6 | The browser refuses to leave without a word, because there are unsaved words | Not solved by persistence. Draft recovery would mean writing clinical text onto a shared cart, which threat model §3 exists to forbid, so the mitigation is the warning and the operator's decision stays recorded there |
+| F29 | A clipboard write is refused | S6/S7 | "This browser refused the clipboard write, so nothing was copied. Use Export instead" — and the status line keeps saying what actually happened | Found by running the screen, not by reading it: the first version printed "copied to the clipboard" after a failed write. A radiologist who believes a report is on the clipboard pastes it into the RIS from memory |
+| F30 | Copy or export asked for before a signature | S7 | "Nothing leaves this screen unsigned — that is the workflow, not a lock you can click past", and focus moves to the sign button | `409 report_unsigned` server-side, mirrored in the client's words. The refusal is the product's claim about the department's order of work |
+
+**F10's measurement half, and F19–F23, are the failures the Alpha copilot can now detect
+from text alone** — nine deterministic checks in
+`apps/radiology_copilot/src/futurekind_radiology/quality.py`, run at draft, again on every
+keystroke that changes a checkable claim, and a third time before a signature.
+F24–F30 are the same argument on the other side of the wire: what the clinician is *told*,
+and what is kept of their work when the answer does not come. Each was exercised against the
+running screen rather than described from the code.
+F10's other half (a plausible finding nobody dictated) and F12 remain outside what text can
+prove: the images are the only oracle, and `quality.scope` states that on the screen and in
+the export rather than leaving it implied.
 
 ---
 
@@ -422,7 +495,20 @@ did not read while the audit trail says they did.
 4. **Measurements and numbers are the human's, by rule.** Where a modality requires a
    size or a count (CT nodes, tumour diameters, cardiac indices), the UI requires typing
    it rather than accepting it. This is the one place the product deliberately does less
-   work than it could.
+   work than it could. **Now enforced below the UI as well:** `unsupported_measurement`
+   refuses a number that appears in neither the submission nor a supplied prior, so a
+   model-authored measurement blocks the signature instead of needing a field to be typed
+   into — with the stated limit that digits are compared, so `two lesions` is not caught
+   while `2 lesions` is.
+
+**Status of these six in the Alpha copilot.** 1 is met in the screen (six editable
+sections, draft lands in fields, nothing accepts the whole report). 3 is met in code: there
+is no path from a draft to a signature in one call, and `POST /review` demands a name and a
+submission. 4 is met, as above. 6 is met and printed. 2 is **partly** met: the amendment list
+is recorded per section, but the screen does not yet show the dictation beside the findings it
+became — the text is in `metadata.dictated_findings` and in the JSON export, waiting for a
+diff. 5 cannot be met until anyone reports on this hardware: the rewrite rate needs a
+department, and there is no measurement of it here.
 5. **Latency must not become the argument for trust.** If drafts take eight seconds and
    manual reports take twelve minutes, the organisation will quietly reward accepting. So
    the quality metric published to the department is the rewrite rate, not drafts per
@@ -441,10 +527,12 @@ default answer here.
 
 | Need | Endpoint | Status | Notes |
 | --- | --- | --- | --- |
-| Draft a report | `POST /draft` (copilot) → `POST /chat` (Gateway) | **Exists** | Sprint 7. Skill `radiology-report` |
-| Sign | `POST /review` | **Exists** | Copilot-side only; ERP-side signature is the ERP's |
+| Draft a report | `POST /draft` (copilot) → `POST /chat` (Gateway) | **Exists** | Sprint 7, widened Sprint 9: the answer carries the nine quality checks and the computed confidence. Skill `radiology-report` |
+| Re-check an edited draft | `POST /check` (copilot) | **Exists** | Sprint 9. The same nine checks over text the clinician is still typing — no Gateway call, no model in the loop, nothing stored |
+| Sign | `POST /review` | **Exists** | Copilot-side only; ERP-side signature is the ERP's. Sprint 9: the body must carry the submission the draft came from, and a blocking finding refuses the signature |
 | Export | `POST /export` | **Exists** | json / text / markdown; refuses unsigned |
-| Health | `GET /health` | **Exists** | Currently leaks a catalog source path — register row 3 |
+| The working screen | `GET /` (copilot) | **Exists** | Sprint 9. One static HTML document served by the copilot: no external resource, no CDN, no browser storage |
+| Health | `GET /health` | **Exists** | Closed 2026-10-08 (was register row 3): the probe endpoints publish verdicts only, and the catalogue source path is gone from the response |
 | Deliver | ERP `POST /api/internal/reporting-studio/finalize` | **Exists** | Contract already matches the copilot document; no new ERP endpoint |
 | Worklist | ERP `GET /api/internal/reporting-studio/worklist`, `GET /api/radiology/worklist` | **Exists** | |
 | Priors | ERP `GET /api/patient-reports/patient/:patientId` | **Exists** | |

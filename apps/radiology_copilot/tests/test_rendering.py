@@ -14,16 +14,32 @@ import pytest
 
 from futurekind_radiology.rendering import EXPORT_FORMATS, render
 from futurekind_radiology.report import SECTION_KEYS, RadiologyReport
-from tests.conftest import FROZEN_STAMP, completion, drafted_report, fixture_text, make_copilot
+from tests.conftest import (
+    FROZEN_STAMP,
+    REQUIRED_OUTPUT,
+    completion,
+    drafted_report,
+    fixture_text,
+    make_copilot,
+    submission_for,
+)
 
 DRAFT, _ = drafted_report()
+STUDY = submission_for("normal_ct_head.json")
 
-HEADINGS = ("CLINICAL INDICATION", "TECHNIQUE", "FINDINGS", "IMPRESSION", "RECOMMENDATIONS")
+HEADINGS = (
+    "CLINICAL INDICATION",
+    "TECHNIQUE",
+    "FINDINGS",
+    "IMPRESSION",
+    "RECOMMENDATIONS",
+    "FOLLOW-UP",
+)
 
 
 def signed():
     copilot, _ = make_copilot(completion(fixture_text("normal_ct_head.json")))
-    return copilot.review(DRAFT, decision="signed", clinician="Dr A. Nair")
+    return copilot.review(DRAFT, decision="signed", clinician="Dr A. Nair", submission=STUDY)
 
 
 def test_the_three_formats_are_the_whole_set() -> None:
@@ -133,17 +149,7 @@ def test_the_json_format_is_the_document_itself() -> None:
     """No fourth rendering that could disagree with the other three."""
     payload = json.loads(render(DRAFT, output_format="json"))
 
-    assert tuple(payload) == (
-        "clinical_indication",
-        "technique",
-        "findings",
-        "impression",
-        "recommendations",
-        "metadata",
-        "model_provenance",
-        "skill",
-        "policy",
-    )
+    assert tuple(payload) == REQUIRED_OUTPUT
     assert RadiologyReport.model_validate(payload) == DRAFT
 
 

@@ -54,7 +54,7 @@ builds a fifth.
 
 | Module | What it is | Ships |
 | --- | --- | --- |
-| **M1 Radiology Copilot** | Draft → review → sign → export, for imaging studies. The application in `apps/radiology_copilot/` | **Alpha, built** |
+| **M1 Radiology Copilot** | Draft → check → review → sign → export, for imaging studies, with nine deterministic grounding checks gating the signature. The application in `apps/radiology_copilot/` | **Alpha, built** |
 | **M2 Skill Runtime** | The Gateway's five namespaces: Skill → Capability → Policy → Alias → Model. Everything above M1 calls it; nothing above M1 names a model | Exists, six skills authorised |
 | **M3 Clinician Workspace** | The screens: queue, draft, comparison, approval, audit, search. Hosted *in* the existing studios rather than as a fifth web app | Design (`UI_UX.md`) |
 | **M4 Evaluation** | 100 golden studies, six-step scoring, drift metrics. The thing that decides whether a model change is allowed | Design, unratified (`GOLDEN_DATASET.yaml`) |
@@ -70,7 +70,8 @@ assets that belong to M2 and M1 respectively.
 
 | Feature | Clinical value | Commercial value |
 | --- | --- | --- |
-| Structured draft from dictation (five sections, four authored by the model) | Turns a 12-minute typing task into a 2-minute checking task | Reporting throughput without more radiologist hours |
+| Structured draft from dictation (six sections, five authored by the model) | Turns a 12-minute typing task into a 2-minute checking task | Reporting throughput without more radiologist hours |
+| Nine deterministic checks against the clinician's own submission, plus a computed confidence grade | A fabricated measurement, an invented history or a hedged sign settled into a diagnosis is visible before a name goes on it — and no check is the model grading itself | The claim a hospital can put in front of a regulator: here is what was tested, and here is what was not |
 | Section-by-section accept, never a whole-report accept | The reviewer's attention is where the safety is | The audit trail is per section, which is what a regulator or a claim asks for |
 | Named-clinician sign-off with the section diff | "Who wrote this sentence" has an answer | The difference between a defensible record and an indefensible one |
 | Model provenance printed on the report | A reader knows machine help was involved and what class of model gave it | Lets the hospital buy a better model later without re-explaining its own history |

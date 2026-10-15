@@ -11,9 +11,17 @@ from __future__ import annotations
 import pytest
 
 from futurekind_radiology.errors import ReviewError, UnsignedExportError
-from tests.conftest import FROZEN_STAMP, completion, drafted_report, fixture_text, make_copilot
+from tests.conftest import (
+    FROZEN_STAMP,
+    completion,
+    drafted_report,
+    fixture_text,
+    make_copilot,
+    submission_for,
+)
 
 DRAFT, _ = drafted_report()
+STUDY = submission_for("normal_ct_head.json")
 
 
 def copilot():
@@ -21,7 +29,7 @@ def copilot():
 
 
 def signed():
-    return copilot().review(DRAFT, decision="signed", clinician="Dr A. Nair")
+    return copilot().review(DRAFT, decision="signed", clinician="Dr A. Nair", submission=STUDY)
 
 
 @pytest.mark.parametrize("output_format", ["json", "text", "markdown"])
@@ -94,6 +102,7 @@ def test_a_reexport_reflects_an_amendment_made_after_signing() -> None:
         decision="signed",
         clinician="Dr B. Rao",
         amendments={"recommendations": "Add MRI with contrast."},
+        submission=STUDY,
     )
 
     result = service.export(amended, output_format="text")
